@@ -1,0 +1,80 @@
+__include__: [
+  '../dataset/det_liver.yml',
+  'ecdet.yml',
+]
+
+# ECDet-L is the official 12-block, 384-dim, 6-head reference configuration.
+# Only the DINOv2-S backbone is pretrained. Adapter projections, encoder,
+# decoder, heads, criterion and EMA start from the current random initialization.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_noreg
+
+DinoV2Adapter:
+  backbone_name: vit_small_patch14_dinov2
+  weights_path: /cobot/Code/xiangshaochong/checkpoints/dinov2/dinov2_vits14_pretrain.pth
+  img_size: 640
+  patch_size: 16
+  proj_dim: 256
+  interaction_indexes: [10, 11]
+  num_levels: 3
+
+ECDet:
+  backbone: DinoV2Adapter
+
+HybridEncoder:
+  in_channels: [256, 256, 256]
+  feat_strides: [8, 16, 32]
+  hidden_dim: 256
+  depth_mult: 1
+  expansion: 0.75
+  dim_feedforward: 1024
+
+ECTransformer:
+  feat_channels: [256, 256, 256]
+  feat_strides: [8, 16, 32]
+  hidden_dim: 256
+  dim_feedforward: 1024
+  num_layers: 3
+  eval_idx: -1
+
+optimizer:
+  type: AdamW
+  params:
+    -
+      params: '^(?=.*.backbone)(?!.*(?:norm|bn|bias)).*$'
+      lr: 0.000005
+    -
+      params: '^(?=.*.backbone)(?=.*(?:norm|bn|bias)).*$'
+      lr: 0.000005
+      weight_decay: 0.
+    -
+      params: '^(?!.*\.backbone)(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.
+  lr: 0.0005
+  betas: [0.9, 0.999]
+  weight_decay: 0.000125
+
+# Requested training schedule.
+epochs: 150
+early_stop_patience: 30
+early_stop_min_delta: 0.0
+checkpoint_freq: 5
+warmup_iter: 2000
+lr_gamma: 0.5
+eval_spatial_size: [640, 640]
+
+# Keep the official ECDet-L augmentation schedule, with two final no-augmentation epochs.
+train_dataloader:
+  total_batch_size: 32
+  num_workers: 8
+  dataset:
+    transforms:
+      mosaic_epoch: 24
+      mosaic_prob: 1.0
+      stop_epoch: 148
+  collate_fn:
+    mixup_prob: 1.0
+    mixup_epoch: 24
+
+val_dataloader:
+  total_batch_size: 32
+  num_workers: 8

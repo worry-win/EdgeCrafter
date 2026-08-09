@@ -1,0 +1,11 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_ec_full_ignore9.yml',
+]
+
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_no_go_ddf_ignore9
+
+# Keep FDR/FGL, but use layer-local matching and remove DDF.
+ECCriterion:
+  use_uni_set: false
+  use_fgl: true
+  use_ddf: false

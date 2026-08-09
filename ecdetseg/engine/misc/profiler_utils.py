@@ -8,7 +8,10 @@ Copyright (c) 2024 The D-FINE Authors. All Rights Reserved.
 import copy
 from typing import Tuple
 
-from calflops import calculate_flops
+try:
+    from calflops import calculate_flops
+except ModuleNotFoundError:  # FLOPs reporting must not block training.
+    calculate_flops = None
 
 
 def stats(
@@ -19,12 +22,16 @@ def stats(
 
     model_for_info = copy.deepcopy(cfg.model).deploy()
 
+    params = sum(p.numel() for p in model_for_info.parameters())
+    if calculate_flops is None:
+        del model_for_info
+        return params, {"Model FLOPs:unavailable (install calflops)   MACs:unavailable   Params:%s" % params}
+
     flops, macs, _ = calculate_flops(model=model_for_info,
                                         input_shape=input_shape,
                                         output_as_string=True,
                                         output_precision=4,
                                         print_detailed=False)
-    params = sum(p.numel() for p in model_for_info.parameters())
     del model_for_info
 
     return params, {"Model FLOPs:%s   MACs:%s   Params:%s" %(flops, macs, params)}

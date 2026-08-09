@@ -76,6 +76,8 @@ class BaseConfig(object):
         self.seed :int = None
         self.print_freq :int = None
         self.checkpoint_freq :int = 1
+        self.early_stop_patience :int = 0
+        self.early_stop_min_delta :float = 0.0
         self.output_dir :str = None
         self.summary_dir :str = None
         self.device : str = ''

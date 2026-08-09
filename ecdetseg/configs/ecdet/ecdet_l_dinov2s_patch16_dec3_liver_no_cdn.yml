@@ -1,0 +1,9 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver.yml',
+]
+
+# CDN-off ablation: this is the only model/training change from ec_full.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_noreg_no_cdn
+
+ECTransformer:
+  num_denoising: 0

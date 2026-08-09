@@ -1,0 +1,33 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver.yml',
+]
+
+# Strict RF-DETR neck alignment: four DINO stages are fused into one P4,
+# then passed directly to the EC D-FINE decoder without HybridEncoder.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_rf_neck_p4_ignore9
+num_classes: 9
+
+train_dataloader:
+  dataset:
+    ann_file: /cobot/Data/Lesion_det/det_liver/annotations/train_ignore_9_12.json
+
+val_dataloader:
+  dataset:
+    ann_file: /cobot/Data/Lesion_det/det_liver/annotations/valid_ignore_9_12.json
+
+DinoV2Adapter:
+  interaction_indexes: [2, 5, 8, 11]
+  num_levels: 1
+  projector_type: rf
+  rf_num_blocks: 3
+  rf_scale_factors: [1.0]
+
+ECDet:
+  encoder: IdentityEncoder
+
+ECTransformer:
+  feat_channels: [256]
+  feat_strides: [16]
+  num_levels: 1
+  num_points: [2]
+  num_layers: 3

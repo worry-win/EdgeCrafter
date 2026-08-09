@@ -292,18 +292,22 @@ class TransformerDecoder(nn.Module):
     """
 
     def __init__(self, hidden_dim, decoder_layer, decoder_layer_wide, segmentation_head, num_layers, num_head, reg_max, reg_scale, up,
-                 eval_idx=-1, layer_scale=2, act='relu'):
+                 eval_idx=-1, layer_scale=2, act='relu', use_fdr_decode=True,
+                 use_aux_distribution=True, use_lqe=True):
         super(TransformerDecoder, self).__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.layer_scale = layer_scale
         self.num_head = num_head
+        self.use_fdr_decode = use_fdr_decode
+        self.use_aux_distribution = use_aux_distribution
+        self.use_lqe = use_lqe
         self.eval_idx = eval_idx if eval_idx >= 0 else num_layers + eval_idx
         self.up, self.reg_scale, self.reg_max = up, reg_scale, reg_max
         self.layers = nn.ModuleList([copy.deepcopy(decoder_layer) for _ in range(self.eval_idx + 1)] \
                     + [copy.deepcopy(decoder_layer_wide) for _ in range(num_layers - self.eval_idx - 1)])
         self.segmentation_head = segmentation_head
-        self.lqe_layers = nn.ModuleList([copy.deepcopy(LQE(4, 64, 2, reg_max, act=act)) for _ in range(num_layers)])
+        self.lqe_layers = nn.ModuleList([copy.deepcopy(LQE(4, 64, 2, reg_max, act=act)) for _ in range(num_layers)]) if use_lqe else None
 
     def value_op(self, memory, value_proj, value_scale, memory_mask, memory_spatial_shapes):
         """
@@ -318,9 +322,11 @@ class TransformerDecoder(nn.Module):
         return value.permute(0, 2, 3, 1).split(split_shape, dim=-1)
 
     def convert_to_deploy(self):
-        self.project = weighting_function(self.reg_max, self.up, self.reg_scale, deploy=True)
+        if self.use_aux_distribution:
+            self.project = weighting_function(self.reg_max, self.up, self.reg_scale, deploy=True)
         self.layers = self.layers[:self.eval_idx + 1]
-        self.lqe_layers = nn.ModuleList([nn.Identity()] * (self.eval_idx) + [self.lqe_layers[self.eval_idx]])
+        if self.lqe_layers is not None:
+            self.lqe_layers = nn.ModuleList([nn.Identity()] * (self.eval_idx) + [self.lqe_layers[self.eval_idx]])
 
     def forward(self,
                 spatial_features,
@@ -337,7 +343,8 @@ class TransformerDecoder(nn.Module):
                 reg_scale,
                 attn_mask=None,
                 memory_mask=None,
-                dn_meta=None):
+                dn_meta=None,
+                continuous_bbox_head=None):
         output = target
         output_detach = pred_corners_undetach = 0
         value = self.value_op(memory, None, None, memory_mask, spatial_shapes)
@@ -347,10 +354,12 @@ class TransformerDecoder(nn.Module):
         dec_out_pred_corners = []
         dec_out_refs = []
         dec_out_hs = []
-        if not hasattr(self, 'project'):
+        if self.use_aux_distribution and not hasattr(self, 'project'):
             project = weighting_function(self.reg_max, up, reg_scale)
-        else:
+        elif self.use_aux_distribution:
             project = self.project
+        else:
+            project = None
 
         ref_points_detach = F.sigmoid(ref_points_unact)
         query_pos_embed = query_pos_head(ref_points_detach).clamp(min=-10, max=10)
@@ -372,24 +381,37 @@ class TransformerDecoder(nn.Module):
                 pre_scores = score_head[0](output)
                 ref_points_initial = pre_bboxes.detach()
 
-            # Refine bounding box corners using FDR, integrating previous layer's corrections
-            pred_corners = bbox_head[i](output + output_detach) + pred_corners_undetach
-            inter_ref_bbox = distance2bbox(ref_points_initial, integral(pred_corners, project), reg_scale)
+            pred_corners = None
+            if self.use_aux_distribution:
+                previous_corners = pred_corners_undetach if torch.is_tensor(pred_corners_undetach) else 0
+                pred_corners = bbox_head[i](output + output_detach) + previous_corners
+                fdr_bbox = distance2bbox(ref_points_initial, integral(pred_corners, project), reg_scale)
+            else:
+                fdr_bbox = None
+
+            if self.use_fdr_decode:
+                inter_ref_bbox = fdr_bbox
+            else:
+                if continuous_bbox_head is None:
+                    raise RuntimeError('continuous_bbox_head is required when FDR decoding is disabled')
+                inter_ref_bbox = F.sigmoid(continuous_bbox_head[i](output) + inverse_sigmoid(ref_points_detach))
 
             if self.training or i == self.eval_idx:
                 scores = score_head[i](output)
-                # Lqe does not affect the performance here.
-                scores = self.lqe_layers[i](scores, pred_corners)
+                if self.use_lqe and pred_corners is not None:
+                    scores = self.lqe_layers[i](scores, pred_corners)
                 dec_out_logits.append(scores)
                 dec_out_bboxes.append(inter_ref_bbox)
-                dec_out_pred_corners.append(pred_corners)
+                if pred_corners is not None:
+                    dec_out_pred_corners.append(pred_corners)
                 dec_out_refs.append(ref_points_initial)
                 dec_out_hs.append(output)
 
                 if not self.training:
                     break
 
-            pred_corners_undetach = pred_corners
+            if pred_corners is not None:
+                pred_corners_undetach = pred_corners
             ref_points_detach = inter_ref_bbox.detach()
             output_detach = output.detach()
 
@@ -400,11 +422,11 @@ class TransformerDecoder(nn.Module):
             )
 
             return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits), \
-                torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), torch.stack(dec_out_segs), \
+                torch.stack(dec_out_pred_corners) if dec_out_pred_corners else None, torch.stack(dec_out_refs), torch.stack(dec_out_segs), \
                 pre_bboxes, pre_scores, dec_out_segs[-1]
         else:
             return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits), \
-                torch.stack(dec_out_pred_corners), torch.stack(dec_out_refs), None, \
+                torch.stack(dec_out_pred_corners) if dec_out_pred_corners else None, torch.stack(dec_out_refs), None, \
                 pre_bboxes, pre_scores, None
 
 @register()
@@ -440,6 +462,9 @@ class ECTransformer(nn.Module):
                  share_bbox_head=False,
                  share_score_head=False,
                  mask_downsample_ratio=None,
+                 use_fdr_decode=True,
+                 use_aux_distribution=True,
+                 use_lqe=True,
                  ):
         super().__init__()
         assert len(feat_channels) <= num_levels
@@ -460,6 +485,9 @@ class ECTransformer(nn.Module):
         self.eval_spatial_size = eval_spatial_size
         self.aux_loss = aux_loss
         self.reg_max = reg_max
+        self.use_fdr_decode = use_fdr_decode
+        self.use_aux_distribution = use_aux_distribution
+        self.use_lqe = use_lqe
 
         assert query_select_method in ('default', 'one2many', 'agnostic'), ''
         assert cross_attn_method in ('default', 'discrete'), ''
@@ -481,7 +509,10 @@ class ECTransformer(nn.Module):
         segmentation_head = SegmentationHead(hidden_dim, num_layers, downsample_ratio=mask_downsample_ratio, image_size=eval_spatial_size) if mask_downsample_ratio else None
         
         self.decoder = TransformerDecoder(hidden_dim, decoder_layer, decoder_layer_wide, segmentation_head, num_layers, nhead,
-                                          reg_max, self.reg_scale, self.up, eval_idx, layer_scale, act=activation)
+                                          reg_max, self.reg_scale, self.up, eval_idx, layer_scale, act=activation,
+                                          use_fdr_decode=use_fdr_decode,
+                                          use_aux_distribution=use_aux_distribution,
+                                          use_lqe=use_lqe)
       # denoising
         self.num_denoising = num_denoising
         self.label_noise_ratio = label_noise_ratio
@@ -505,7 +536,7 @@ class ECTransformer(nn.Module):
 
         # decoder head
         self.pre_bbox_head = MLP(hidden_dim, hidden_dim, 4, 3, act=activation)
-        self.integral = Integral(self.reg_max)
+        self.integral = Integral(self.reg_max) if use_aux_distribution else None
 
         self.eval_idx = eval_idx if eval_idx >= 0 else num_layers + eval_idx
         dec_score_head = nn.Linear(hidden_dim, num_classes)
@@ -513,11 +544,20 @@ class ECTransformer(nn.Module):
             [dec_score_head if share_score_head else copy.deepcopy(dec_score_head) for _ in range(self.eval_idx + 1)]
           + [copy.deepcopy(dec_score_head) for _ in range(num_layers - self.eval_idx - 1)])
 
-        # Share the same bbox head for all layers
-        dec_bbox_head = MLP(hidden_dim, hidden_dim, 4 * (self.reg_max+1), 3, act=activation)
-        self.dec_bbox_head = nn.ModuleList(
-            [dec_bbox_head if share_bbox_head else copy.deepcopy(dec_bbox_head) for _ in range(self.eval_idx + 1)]
-          + [MLP(scaled_dim, scaled_dim, 4 * (self.reg_max+1), 3, act=activation) for _ in range(num_layers - self.eval_idx - 1)])
+        # Distribution heads are only needed when FDR is retained as a prediction or auxiliary path.
+        if use_aux_distribution:
+            dec_bbox_head = MLP(hidden_dim, hidden_dim, 4 * (self.reg_max+1), 3, act=activation)
+            self.dec_bbox_head = nn.ModuleList(
+                [dec_bbox_head if share_bbox_head else copy.deepcopy(dec_bbox_head) for _ in range(self.eval_idx + 1)]
+              + [MLP(scaled_dim, scaled_dim, 4 * (self.reg_max+1), 3, act=activation) for _ in range(num_layers - self.eval_idx - 1)])
+        else:
+            self.dec_bbox_head = None
+
+        if not use_fdr_decode:
+            self.continuous_bbox_head = nn.ModuleList(
+                [MLP(scaled_dim, scaled_dim, 4, 3, act=activation) for _ in range(num_layers)])
+        else:
+            self.continuous_bbox_head = None
 
         # init encoder output anchors and valid_mask
         if self.eval_spatial_size:
@@ -533,9 +573,12 @@ class ECTransformer(nn.Module):
 
     def convert_to_deploy(self):
         self.dec_score_head = nn.ModuleList([nn.Identity()] * (self.eval_idx) + [self.dec_score_head[self.eval_idx]])
-        self.dec_bbox_head = nn.ModuleList(
-            [self.dec_bbox_head[i] if i <= self.eval_idx else nn.Identity() for i in range(len(self.dec_bbox_head))]
-        )
+        if self.dec_bbox_head is not None:
+            self.dec_bbox_head = nn.ModuleList(
+                [self.dec_bbox_head[i] if i <= self.eval_idx else nn.Identity() for i in range(len(self.dec_bbox_head))]
+            )
+        if self.continuous_bbox_head is not None:
+            self.continuous_bbox_head = nn.ModuleList(list(self.continuous_bbox_head[:self.eval_idx + 1]))
 
     def _reset_parameters(self, feat_channels):
         bias = bias_init_with_prob(0.01)
@@ -546,9 +589,14 @@ class ECTransformer(nn.Module):
         init.constant_(self.pre_bbox_head.layers[-1].weight, 0)
         init.constant_(self.pre_bbox_head.layers[-1].bias, 0)
 
-        for cls_, reg_ in zip(self.dec_score_head, self.dec_bbox_head):
+        for cls_, reg_ in zip(self.dec_score_head, self.dec_bbox_head or []):
             init.constant_(cls_.bias, bias)
             if hasattr(reg_, 'layers'):
+                init.constant_(reg_.layers[-1].weight, 0)
+                init.constant_(reg_.layers[-1].bias, 0)
+
+        if self.continuous_bbox_head is not None:
+            for reg_ in self.continuous_bbox_head:
                 init.constant_(reg_.layers[-1].weight, 0)
                 init.constant_(reg_.layers[-1].bias, 0)
 
@@ -749,10 +797,12 @@ class ECTransformer(nn.Module):
                 self.integral,
                 self.up,
                 self.reg_scale,
+                continuous_bbox_head=self.continuous_bbox_head,
                 attn_mask=attn_mask,
                 dn_meta=dn_meta)    
 
         s_idx = dn_meta['dn_num_split'] if dn_meta is not None else None
+        pred_segs = pre_segs
 
         if self.training and dn_meta is not None:
             dn_pre_logits, pre_logits = self._split(pre_logits, 1, s_idx)
@@ -766,23 +816,31 @@ class ECTransformer(nn.Module):
             dn_out_refs, out_refs = self._split(out_refs, 2, s_idx)
 
         if self.training:
-            out = {'pred_logits': out_logits[-1], 'pred_boxes': out_bboxes[-1], 'pred_corners': out_corners[-1],
-                    'pred_masks': out_masks[-1] if out_masks is not None else None, 
-                    'ref_points': out_refs[-1], 'up': self.up, 'reg_scale': self.reg_scale}
+            out = {'pred_logits': out_logits[-1], 'pred_boxes': out_bboxes[-1],
+                    'pred_masks': out_masks[-1] if out_masks is not None else None}
+            if out_corners is not None:
+                out.update({'pred_corners': out_corners[-1], 'ref_points': out_refs[-1],
+                            'up': self.up, 'reg_scale': self.reg_scale})
         else:
             out = {'pred_logits': out_logits[-1], 'pred_boxes': out_bboxes[-1], 'pred_masks': out_masks[-1] if out_masks is not None else None}
 
         if self.training and self.aux_loss:
-            out['aux_outputs'] = self._set_aux_loss2(out_logits[:-1], out_bboxes[:-1], out_corners[:-1], 
-                                                     out_refs[:-1], out_masks[:-1] if out_masks is not None else None,
-                                                     out_corners[-1], out_logits[-1])
+            if out_corners is not None:
+                out['aux_outputs'] = self._set_aux_loss2(out_logits[:-1], out_bboxes[:-1], out_corners[:-1],
+                                                         out_refs[:-1], out_masks[:-1] if out_masks is not None else None,
+                                                         out_corners[-1], out_logits[-1])
+            else:
+                out['aux_outputs'] = self._set_aux_loss(out_logits[:-1], out_bboxes[:-1])
             out['enc_aux_outputs'] = self._set_aux_loss(enc_topk_logits_list, enc_topk_bboxes_list)
             out['pre_outputs'] = {'pred_logits': pre_logits, 'pred_boxes': pre_bboxes, 'pred_masks': pred_segs}
             out['enc_meta'] = {'class_agnostic': self.query_select_method == 'agnostic'}
 
             if dn_meta is not None:
-                out['dn_outputs'] = self._set_aux_loss2(dn_out_logits, dn_out_bboxes, dn_out_corners, dn_out_refs, dn_out_masks,
-                                                        dn_out_corners[-1], dn_out_logits[-1])
+                if dn_out_corners is not None:
+                    out['dn_outputs'] = self._set_aux_loss2(dn_out_logits, dn_out_bboxes, dn_out_corners, dn_out_refs, dn_out_masks,
+                                                            dn_out_corners[-1], dn_out_logits[-1])
+                else:
+                    out['dn_outputs'] = self._set_aux_loss(dn_out_logits, dn_out_bboxes)
                 out['dn_pre_outputs'] = {'pred_logits': dn_pre_logits, 'pred_boxes': dn_pre_bboxes, 'pred_masks': dn_pre_segs}
                 out['dn_meta'] = dn_meta
 
@@ -841,4 +899,3 @@ class ECTransformer(nn.Module):
             results.append(result)
 
         return results
-

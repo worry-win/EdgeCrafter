@@ -1,0 +1,17 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_ec_full_ignore9.yml',
+]
+
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_no_fdr_decode_ignore9
+
+# Loss-only/path comparison: keep distribution output for FGL/DDF, but decode
+# the final boxes with the continuous regression head.
+ECTransformer:
+  use_fdr_decode: false
+  use_aux_distribution: true
+  use_lqe: false
+
+ECCriterion:
+  use_uni_set: true
+  use_fgl: true
+  use_ddf: true

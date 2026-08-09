@@ -438,12 +438,27 @@ class ViTAdapter(nn.Module):
         
         path = Path(weights_path)
         if path.exists():
-            state = torch.load(path, weights_only=True, map_location="cpu")
-            self.backbone.load_state_dict(state, strict=True)
+            checkpoint = torch.load(path, weights_only=True, map_location="cpu")
+            # Distillation checkpoints store the student backbone under a
+            # ``student`` key, while released backbone weights are raw state
+            # dictionaries. Never accept a full detector checkpoint here:
+            # loading only a silently filtered subset would hide a bad setup.
+            state = checkpoint.get("student") if isinstance(checkpoint, dict) else None
+            if state is None:
+                state = checkpoint
+            if not isinstance(state, dict):
+                raise TypeError(f"Expected a backbone state dict in {path}, got {type(state).__name__}")
+            incompatible = self.backbone.load_state_dict(state, strict=False)
+            if incompatible.missing_keys or incompatible.unexpected_keys:
+                raise RuntimeError(
+                    f"Backbone checkpoint mismatch for {path}: "
+                    f"missing={incompatible.missing_keys}, unexpected={incompatible.unexpected_keys}"
+                )
             print(
                 "=" * 80 + "\n",
                 "✅ Pretrained ViT weights loaded successfully!\n"
-                f"📦 Weights file: {path}\n",
+                f"📦 Weights file: {path}\n"
+                f"🔢 Matched backbone keys: {len(state)}\n",
                 "=" * 80
             )
         else:

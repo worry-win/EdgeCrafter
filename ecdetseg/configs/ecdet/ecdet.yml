@@ -57,6 +57,9 @@ ECTransformer:
   num_points: [3, 6, 3] # [4, 4, 4] [3, 6, 3]
   cross_attn_method: default # default, discrete
   query_select_method: default # default, agnostic
+  use_fdr_decode: true
+  use_aux_distribution: true
+  use_lqe: true
 
   # Act
   activation: silu
@@ -71,6 +74,9 @@ PostProcessor:
 ECCriterion:
   weight_dict: {loss_mal: 1, loss_bbox: 5, loss_giou: 2, loss_fgl: 0.15, loss_ddf: 1.5}
   losses: ['mal', 'boxes', 'local']
+  use_fgl: true
+  use_ddf: true
+  use_uni_set: true
   gamma: 1.5
   alpha: 0.75
   reg_max: 32
@@ -189,4 +195,4 @@ epochs: 62 # 5x (1x for 12 epochs) + 2(no_aug_epoch)
 lrsheduler: flatcosine
 lr_gamma: 0.5
 warmup_iter: 2000
-flat_epoch: ~    
+flat_epoch: ~

@@ -7,7 +7,15 @@ import torch.nn as nn
 
 from ..core import register
 
-__all__ = ['ECDet', 'ECSeg']
+__all__ = ['ECDet', 'ECSeg', 'IdentityEncoder']
+
+
+@register()
+class IdentityEncoder(nn.Module):
+    """Pass RF projector features directly to the EC decoder."""
+
+    def forward(self, features):
+        return features
 
 
 class _ECBase(nn.Module):

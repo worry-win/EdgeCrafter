@@ -1,0 +1,25 @@
+__include__: [
+  'ecdet_x_liver_ignore9.yml',
+]
+
+# Four-GPU continuation of the ECDet-X initialization comparison.
+output_dir: outputs/ecdet_x_liver_ignore9_150e
+epochs: 150
+early_stop_patience: 30
+early_stop_min_delta: 0.0
+checkpoint_freq: 5
+
+# Preserve the two final no-augmentation epochs when extending 50 -> 150 epochs.
+train_dataloader:
+  total_batch_size: 32
+  dataset:
+    transforms:
+      mosaic_epoch: 24
+      mosaic_prob: 1.0
+      stop_epoch: 148
+  collate_fn:
+    mixup_prob: 1.0
+    mixup_epoch: 24
+
+val_dataloader:
+  total_batch_size: 32

@@ -51,8 +51,11 @@ def main(args, ) -> None:
     cfg = YAMLConfig(args.config, **update_dict)
 
     if args.resume or args.tuning:
-        if 'ViTAdapter' in cfg.yaml_cfg:
-            cfg.yaml_cfg['ViTAdapter']['skip_load_backbone'] = True
+        # A resume/tuning checkpoint contains the complete detector. Avoid
+        # reloading an external backbone before applying that checkpoint.
+        for backbone_name in ('ViTAdapter', 'DinoV2Adapter'):
+            if backbone_name in cfg.yaml_cfg:
+                cfg.yaml_cfg[backbone_name]['skip_load_backbone'] = True
 
     print('cfg: ', cfg.__dict__)
 

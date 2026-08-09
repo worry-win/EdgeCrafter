@@ -1,0 +1,21 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_ec_full_ignore9.yml',
+]
+
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_no_mosaic_no_mal_ignore9
+
+# Disable Mosaic only; MixUp and all other augmentation settings stay aligned
+# with the strict EC-full control.
+train_dataloader:
+  dataset:
+    transforms:
+      mosaic_prob: 0.0
+
+# MAL is the classification loss, so MAL-off must fall back to standard focal
+# classification supervision rather than removing classification loss entirely.
+ECCriterion:
+  weight_dict: {loss_focal: 1, loss_bbox: 5, loss_giou: 2, loss_fgl: 0.15, loss_ddf: 1.5}
+  losses: ['focal', 'boxes', 'local']
+  # Standard sigmoid focal classification parameters (the matcher uses the same pair).
+  alpha: 0.25
+  gamma: 2.0

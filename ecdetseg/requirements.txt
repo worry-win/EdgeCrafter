@@ -8,6 +8,7 @@ tensorboard
 scipy==1.16.0
 calflops
 transformers
+timm
 tabulate
 onnx==1.19.0
 onnxruntime

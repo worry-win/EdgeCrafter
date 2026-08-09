@@ -1,0 +1,17 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_ec_full_ignore9.yml',
+]
+
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_no_fdr_no_go_ddf_ignore9
+
+# Continuous regression only: no FDR distribution, FGL, GO union or DDF.
+ECTransformer:
+  use_fdr_decode: false
+  use_aux_distribution: false
+  use_lqe: false
+
+ECCriterion:
+  losses: ['mal', 'boxes']
+  use_uni_set: false
+  use_fgl: false
+  use_ddf: false

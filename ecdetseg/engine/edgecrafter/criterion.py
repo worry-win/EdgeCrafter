@@ -47,6 +47,8 @@ class ECCriterion(nn.Module):
         mal_alpha=None,
         use_uni_set=True,
         mask_point_sample_ratio=None,
+        use_fgl=True,
+        use_ddf=True,
         ):
         super().__init__()
         self.num_classes = num_classes
@@ -63,6 +65,8 @@ class ECCriterion(nn.Module):
         self.num_pos, self.num_neg = None, None
         self.mal_alpha = mal_alpha
         self.use_uni_set = use_uni_set
+        self.use_fgl = use_fgl
+        self.use_ddf = use_ddf
         self.mask_point_sample_ratio = matcher.mask_point_sample_ratio
 
     def loss_labels_focal(self, outputs, targets, indices, num_boxes):
@@ -73,7 +77,7 @@ class ECCriterion(nn.Module):
         target_classes = torch.full(src_logits.shape[:2], self.num_classes,
                                     dtype=torch.int64, device=src_logits.device)
         target_classes[idx] = target_classes_o
-        target = F.one_hot(target_classes, num_classes=self.num_classes+1)[..., :-1]
+        target = F.one_hot(target_classes, num_classes=self.num_classes+1)[..., :-1].to(src_logits.dtype)
         loss = torchvision.ops.sigmoid_focal_loss(src_logits, target, self.alpha, self.gamma, reduction='none')
         loss = loss.mean(1).sum() * src_logits.shape[1] / num_boxes
 
@@ -230,23 +234,21 @@ class ECCriterion(nn.Module):
             pred_corners = outputs['pred_corners'][idx].reshape(-1, (self.reg_max+1))
             ref_points = outputs['ref_points'][idx].detach()
             with torch.no_grad():
-                if self.fgl_targets_dn is None and 'is_dn' in outputs:
-                        self.fgl_targets_dn= bbox2distance(ref_points, box_cxcywh_to_xyxy(target_boxes),
-                                                        self.reg_max, outputs['reg_scale'], outputs['up'])
-                if self.fgl_targets is None and 'is_dn' not in outputs:
-                        self.fgl_targets = bbox2distance(ref_points, box_cxcywh_to_xyxy(target_boxes),
-                                                        self.reg_max, outputs['reg_scale'], outputs['up'])
-
-            target_corners, weight_right, weight_left = self.fgl_targets_dn if 'is_dn' in outputs else self.fgl_targets
+                # Recompute for each output when layer-local matching is used.
+                # Caching a previous layer's targets would silently misalign FGL.
+                target_corners, weight_right, weight_left = bbox2distance(
+                    ref_points, box_cxcywh_to_xyxy(target_boxes),
+                    self.reg_max, outputs['reg_scale'], outputs['up'])
 
             ious = torch.diag(box_iou(\
                         box_cxcywh_to_xyxy(outputs['pred_boxes'][idx]), box_cxcywh_to_xyxy(target_boxes))[0])
             weight_targets = ious.unsqueeze(-1).repeat(1, 1, 4).reshape(-1).detach()
 
-            losses['loss_fgl'] = self.unimodal_distribution_focal_loss(
-                pred_corners, target_corners, weight_right, weight_left, weight_targets, avg_factor=num_boxes)
+            if self.use_fgl:
+                losses['loss_fgl'] = self.unimodal_distribution_focal_loss(
+                    pred_corners, target_corners, weight_right, weight_left, weight_targets, avg_factor=num_boxes)
 
-            if 'teacher_corners' in outputs:
+            if self.use_ddf and 'teacher_corners' in outputs:
                 pred_corners = outputs['pred_corners'].reshape(-1, (self.reg_max+1))
                 target_corners = outputs['teacher_corners'].reshape(-1, (self.reg_max+1))
                 if torch.equal(pred_corners, target_corners):

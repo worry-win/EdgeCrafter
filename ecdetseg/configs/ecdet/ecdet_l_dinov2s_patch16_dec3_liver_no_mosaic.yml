@@ -1,0 +1,11 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver.yml',
+]
+
+# D-FINE/GO-DDF/CDN remain fully enabled; only Mosaic is disabled.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_no_mosaic
+
+train_dataloader:
+  dataset:
+    transforms:
+      mosaic_prob: 0.0

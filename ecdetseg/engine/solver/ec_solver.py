@@ -18,7 +18,29 @@ from ._solver import BaseSolver
 from .ec_engine import evaluate, train_one_epoch
 
 
+def _metric_values(value):
+    """Return evaluator output as a list for logging and best-score handling."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    if hasattr(value, 'tolist'):
+        value = value.tolist()
+        return value if isinstance(value, list) else [value]
+    return [value]
+
+
 class ECSolver(BaseSolver):
+
+    def state_dict(self):
+        state = super().state_dict()
+        if hasattr(self, '_early_stop_state'):
+            state['early_stop_state'] = dict(self._early_stop_state)
+        return state
+
+    def load_state_dict(self, state):
+        super().load_state_dict(state)
+        self._early_stop_state = dict(state.get('early_stop_state', {}))
 
     def fit(self, ):
         self.train()
@@ -42,8 +64,11 @@ class ECSolver(BaseSolver):
         else:
             self.self_lr_scheduler = False
 
-        top1 = 0
+        top1 = float('-inf')
         best_stat = {'epoch': -1, }
+        early_state = getattr(self, '_early_stop_state', {})
+        best_primary_score = float(early_state.get('best_primary_score', float('-inf')))
+        no_improve_epochs = int(early_state.get('no_improve_epochs', 0))
         # evaluate again before resume training
         if self.last_epoch > 0:
             module = self.ema.module if self.ema else self.model
@@ -55,10 +80,14 @@ class ECSolver(BaseSolver):
                 self.evaluator,
                 self.device
             )
-            for k in test_stats:
+            for k, value in test_stats.items():
+                values = _metric_values(value)
+                if not values:
+                    continue
                 best_stat['epoch'] = self.last_epoch
-                best_stat[k] = test_stats[k][0]
-                top1 = test_stats[k][0]
+                best_stat[k] = values[0]
+                if k == f'coco_eval_{self.iou_type}':
+                    top1 = values[0]
                 print(f'best_stat: {best_stat}')
 
         best_stat_print = best_stat.copy()
@@ -76,6 +105,7 @@ class ECSolver(BaseSolver):
                     torch.distributed.barrier()
                 self.load_resume_state(str(self.output_dir / 'best.pth'))
                 self.last_epoch = epoch - 1
+                no_improve_epochs = 0
 
             train_stats = train_one_epoch(
                 self.self_lr_scheduler,
@@ -118,26 +148,48 @@ class ECSolver(BaseSolver):
                 self.device
             )
 
-            for k in test_stats:
+            primary_key = f'coco_eval_{self.iou_type}'
+            for k, value in test_stats.items():
+                values = _metric_values(value)
+                if not values:
+                    continue
                 if self.writer and dist_utils.is_main_process():
-                    for i, v in enumerate(test_stats[k]):
+                    for i, v in enumerate(values):
                         self.writer.add_scalar(f'Test/{k}_{i}'.format(k), v, epoch)
 
+                current_value = values[0]
                 if k in best_stat:
-                    best_stat['epoch'] = epoch if test_stats[k][0] > best_stat[k] else best_stat['epoch']
-                    best_stat[k] = max(best_stat[k], test_stats[k][0])
+                    if current_value > best_stat[k]:
+                        best_stat[k] = current_value
+                        if k == primary_key:
+                            best_stat['epoch'] = epoch
                 else:
-                    best_stat['epoch'] = epoch
-                    best_stat[k] = test_stats[k][0]
+                    best_stat[k] = current_value
+                    if k == primary_key:
+                        best_stat['epoch'] = epoch
 
-                if best_stat[k] > top1:
+                # Checkpoint selection follows the configured COCO primary metric,
+                # while auxiliary scalar metrics remain logging-only.
+                if k == primary_key and current_value > top1:
                     best_stat_print['epoch'] = epoch
-                    top1 = best_stat[k]
+                    top1 = current_value
                     if self.output_dir:
                         dist_utils.save_on_master(self.state_dict(), self.output_dir / 'best.pth')
 
                 best_stat_print[k] = max(best_stat[k], top1)
                 print(f'best_stat: {best_stat_print}')  # global best
+
+            primary_values = _metric_values(test_stats.get(f'coco_eval_{self.iou_type}'))
+            primary_score = float(primary_values[0]) if primary_values else float('-inf')
+            if primary_score > best_primary_score + args.early_stop_min_delta:
+                best_primary_score = primary_score
+                no_improve_epochs = 0
+            else:
+                no_improve_epochs += 1
+            self._early_stop_state = {
+                'best_primary_score': best_primary_score,
+                'no_improve_epochs': no_improve_epochs,
+            }
 
             log_stats = {
                 **{f'train_{k}': v for k, v in train_stats.items()},
@@ -160,6 +212,14 @@ class ECSolver(BaseSolver):
                         for name in filenames:
                             torch.save(coco_evaluator.coco_eval[self.iou_type].eval,
                                     self.output_dir / "eval" / name)
+            if self.output_dir:
+                dist_utils.save_on_master(self.state_dict(), self.output_dir / 'last.pth')
+            if args.early_stop_patience and no_improve_epochs >= args.early_stop_patience:
+                print(
+                    f'Early stopping after {no_improve_epochs} epochs without improvement '
+                    f'on coco_eval_{self.iou_type}[0].'
+                )
+                break
             if torch.cuda.is_available():  # Just for clearing up GPU memory. You can remove it if you have enough GPU memory.
                 torch.cuda.empty_cache()
 

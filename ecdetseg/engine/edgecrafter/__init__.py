@@ -9,8 +9,9 @@ Copyright(c) 2023 lyuwenyu. All Rights Reserved.
 
 from .criterion import ECCriterion
 from .decoder import ECTransformer
+from .dinov2_adapter import DinoV2Adapter
 from .ecvit import ViTAdapter
 from .hybrid_encoder import HybridEncoder
 from .matcher import HungarianMatcher
-from .modeling import ECDet, ECSeg
+from .modeling import ECDet, ECSeg, IdentityEncoder
 from .postprocessor import PostProcessor

@@ -11,6 +11,7 @@ import math
 import sys
 from typing import Iterable
 
+import numpy as np
 import torch
 from torch.cuda.amp.grad_scaler import GradScaler
 from torch.utils.tensorboard import SummaryWriter
@@ -165,12 +166,36 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
         coco_evaluator.accumulate()
         coco_evaluator.summarize()
 
+    def _pr_curve_f1(coco_eval):
+        """Maximum macro-F1 on the COCO IoU=.50 precision-recall curve."""
+        precision = coco_eval.eval['precision'][0, :, :, 0, -1]
+        recalls = coco_eval.params.recThrs
+        valid = precision > -1
+        if not valid.any():
+            return -1.0, -1.0
+        p_sum = np.where(valid, precision, 0.0).sum(axis=1)
+        p_count = valid.sum(axis=1)
+        p_mean = np.divide(p_sum, p_count, out=np.zeros_like(p_sum), where=p_count > 0)
+        f1 = 2 * p_mean * recalls / np.maximum(p_mean + recalls, 1e-12)
+        index = int(np.argmax(f1))
+        return float(f1[index]), float(recalls[index])
+
     stats = {}
     # stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
     if coco_evaluator.labels is not None:
         
-        import numpy as np
-        from tabulate import tabulate
+        try:
+            from tabulate import tabulate
+        except ImportError:
+            def tabulate(rows, headers, tablefmt=None):
+                values = [headers, *rows]
+                widths = [max(len(str(row[i])) for row in values) for i in range(len(headers))]
+
+                def format_row(row):
+                    return " | ".join(str(value).ljust(width) for value, width in zip(row, widths))
+
+                separator = "-+-".join("-" * width for width in widths)
+                return "\n".join([format_row(headers), separator, *(format_row(row) for row in rows)])
         
         res_per_type = {}
         headers = ['class']
@@ -206,5 +231,9 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
             stats['coco_eval_mask'] = coco_evaluator.coco_eval['segm'].stats.tolist()
         elif 'bbox' in iou_types:
             stats['coco_eval_bbox'] = coco_evaluator.coco_eval['bbox'].stats.tolist()
+            f1, f1_recall = _pr_curve_f1(coco_evaluator.coco_eval['bbox'])
+            stats['coco_eval_bbox_f1'] = f1
+            stats['coco_eval_bbox_f1_recall'] = f1_recall
+            print(f"bbox-macro-F1@IoU50(PR-curve): {f1:.6f} (recall-grid={f1_recall:.3f})")
 
     return stats, coco_evaluator

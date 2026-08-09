@@ -1,0 +1,65 @@
+__include__: [
+  '../dataset/coco.yml',
+  'ecdet.yml',
+]
+
+# Backbone-only initialization baseline. The checkpoint contains an ECViT-S+
+# student (384 dim, 6 heads, 12 blocks, FFN ratio 6); all detector-side
+# modules are initialized by the current config and are not loaded from it.
+output_dir: outputs/ablation/ec_full_ecvitsplus_backbone_dec5
+
+ViTAdapter:
+  name: ecvitsplus
+  embed_dim: 384
+  num_heads: 6
+  depth: 12
+  proj_dim: 256
+  interaction_indexes: [10, 11]
+  ffn_ratio: 6
+  weights_path: /cobot/Code/CODE/EC/ckpts/EC-encoder-distill-1+2.pth
+
+HybridEncoder:
+  in_channels: [256, 256, 256]
+  depth_mult: 1
+  expansion: 0.75
+  hidden_dim: 256
+  dim_feedforward: 1024
+
+ECTransformer:
+  feat_channels: [256, 256, 256]
+  hidden_dim: 256
+  dim_feedforward: 1024
+  num_layers: 5
+  eval_idx: -1
+
+optimizer:
+  type: AdamW
+  params:
+    -
+      params: '^(?=.*.backbone)(?!.*(?:norm|bn|bias)).*$'
+      lr: 0.000005
+    -
+      params: '^(?=.*.backbone)(?=.*(?:norm|bn|bias)).*$'
+      lr: 0.000005
+      weight_decay: 0.
+    -
+      params: '^(?!.*\.backbone)(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.
+  lr: 0.0005
+  betas: [0.9, 0.999]
+  weight_decay: 0.000125
+
+epochs: 50
+warmup_iter: 2000
+lr_gamma: 0.5
+eval_spatial_size: [640, 640]
+
+train_dataloader:
+  dataset:
+    transforms:
+      mosaic_epoch: 24
+      mosaic_prob: 1
+      stop_epoch: 48
+  collate_fn:
+    mixup_prob: 1
+    mixup_epoch: 24

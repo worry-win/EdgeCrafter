@@ -1,0 +1,10 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_ec_full_ignore9.yml',
+]
+
+# Strict 9-class CDN-off control.  The only algorithmic change from the strict
+# EC-full control is removal of contrastive denoising queries and losses.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_no_cdn_ignore9
+
+ECTransformer:
+  num_denoising: 0

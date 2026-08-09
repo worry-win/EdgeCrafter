@@ -28,10 +28,22 @@ __all__ = ['CocoEvaluator',]
 
 @register()
 class CocoEvaluator(object):
-    def __init__(self, coco_gt, iou_types, verbose=True):
+    def __init__(self, coco_gt, iou_types, verbose=True, ignore_category_ids=None):
         assert isinstance(iou_types, (list, tuple))
         coco_gt = copy.deepcopy(coco_gt)
+        self.ignore_category_ids = set(ignore_category_ids or [])
+        if self.ignore_category_ids:
+            coco_gt.dataset['categories'] = [
+                cat for cat in coco_gt.dataset.get('categories', [])
+                if cat['id'] not in self.ignore_category_ids
+            ]
+            coco_gt.dataset['annotations'] = [
+                ann for ann in coco_gt.dataset.get('annotations', [])
+                if ann.get('category_id') not in self.ignore_category_ids
+            ]
+            coco_gt.createIndex()
         self.coco_gt : COCO = coco_gt
+        self.allowed_category_ids = set(coco_gt.getCatIds())
         self.coco_gt.dataset.setdefault('info', {})
         self.iou_types = iou_types
         self.labels = [cat['name'] for cat in coco_gt.loadCats(coco_gt.getCatIds())] if verbose else None
@@ -115,6 +127,7 @@ class CocoEvaluator(object):
                         "score": scores[k],
                     }
                     for k, box in enumerate(boxes)
+                    if labels[k] in self.allowed_category_ids
                 ]
             )
         return coco_results

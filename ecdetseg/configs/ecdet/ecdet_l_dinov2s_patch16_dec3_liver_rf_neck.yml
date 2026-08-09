@@ -1,0 +1,11 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver.yml',
+]
+
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_rf_neck
+
+DinoV2Adapter:
+  # RF-DETR uses stages 3/6/9/12. timm block indexes are zero-based.
+  interaction_indexes: [2, 5, 8, 11]
+  projector_type: rf
+  rf_num_blocks: 3
