@@ -200,8 +200,11 @@ bash scripts/ablation/wait_ecdet_l_dinov2s_patch16_dec3_liver_no_cdn_tmux.sh
 | `no_fdr_decode` | `..._no_fdr_decode.yml` | 最终框由连续 4 维回归 head 解码；保留分布辅助、FGL 和 DDF | `outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_no_fdr_decode` |
 | `no_go_ddf` | `..._no_go_ddf.yml` | 关闭 GO union (`use_uni_set=false`) 和 DDF；保留 FDR/FGL | `outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_no_go_ddf` |
 | `no_fdr_no_go_ddf` | `..._no_fdr_no_go_ddf.yml` | 连续框回归；关闭分布辅助、FGL、GO union 和 DDF | `outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_no_fdr_no_go_ddf` |
+| `no_dfine_ignore9` | `..._no_dfine_ignore9.yml` | strict-9 no-D-FINE：在上一行基础上移除 D-FINE pre head / pre loss；保留 CDN 与 MAL | `outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_no_dfine_ignore9` |
 
 这里的 `no_fdr_decode` 是完整 D-FINE decoder 的 loss-only/路径对照：分布仍作为辅助输出，以保证 FGL/DDF 的比较合法，不能将它表述为“完全移除 FDR”。第三组才是 continuous-box-only decoder。`GO union` 是跨 final、auxiliary、pre 和 encoder Hungarian matches 的 query-GT union；它与 DDF 是两个独立机制，本实验的第二、三组按组合开关同时检验它们的影响。
+
+`no_dfine_ignore9` 是新增但尚未提交训练的严格 9 类分支，不能与已完成的 `no_fdr_no_go_ddf` 结果混用。旧分支虽已关闭 FDR/FGL/DDF/GO/LQE，但仍会创建 `pre_bbox_head`，并对 `pre_outputs` 与 `dn_pre_outputs` 计算 MAL、L1、GIoU；该 pre path 在 decoder 源码中明确属于 D-FINE 辅助监督。新分支设置 `use_pre_outputs=false`，因此不创建该模块或其输出。它仍保持 `num_denoising=100` 和 MAL 开启，因为 CDN 与 MAL 分别属于 DN-DETR/DINO 与 DEIM，不是 D-FINE。详见 [`EC_DFINE_OFF_RF_ALIGNMENT.md`](EC_DFINE_OFF_RF_ALIGNMENT.md)。
 
 三个任务由同一个 runner 选择 YAML 和独立输出目录：
 

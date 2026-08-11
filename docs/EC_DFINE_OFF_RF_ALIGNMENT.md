@@ -154,6 +154,19 @@ loss_giou (weight 2)
 
 在 dec3 + CDN-on 的情况下，它们会施加到：final decoder、2 个 decoder auxiliary layers、`pre_outputs`、1 个 encoder auxiliary output、3 个 DN decoder layers、DN pre output。即最多 9 组 prediction output，每组 3 个可训练 loss。`loss_mask_*` 不在 `losses` 中；cardinality 也不是当前 EC criterion 的训练 loss。
 
+### 3.4 新增 strict no-D-FINE 分支
+
+配置 `ecdet_l_dinov2s_patch16_dec3_liver_no_dfine_ignore9.yml` 是后续正式的 strict-9 no-D-FINE 对照。它继承 strict EC-full，然后在已有 no-FDR/no-GO-DDF 开关外增加：
+
+```yaml
+ECTransformer:
+  use_pre_outputs: false
+```
+
+该开关使模型不创建 `pre_bbox_head`，也不产生 `pre_outputs` 或 `dn_pre_outputs`；criterion 因此不会计算任何 `*_pre` / `*_dn_pre` loss。并且当 `use_aux_distribution=false` 时，`up` 与 `reg_scale` 这两个仅服务于 FDR 分布路径的状态也不会注册到模型中。
+
+strict no-D-FINE 仍保留 CDN 和 MAL，因为两者分别来自 DINO/DN-DETR 与 DEIM，不属于 D-FINE。它的有梯度输出为 final decoder、2 个 decoder auxiliary outputs、1 个 encoder auxiliary output，以及 CDN 的 3 个 decoder outputs；每组只计算 `loss_mal`、`loss_bbox`、`loss_giou`。这正是“移除 D-FINE 策略而不同时移除其他 EC 训练机制”的对照。
+
 ## 4. RF baseline 实际 decoder 和 loss
 
 参考 RF baseline 的核心不是 D-FINE decoder，而是 RF/LW-DETR decoder。其执行路径为：

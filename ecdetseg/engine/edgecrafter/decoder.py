@@ -293,7 +293,7 @@ class TransformerDecoder(nn.Module):
 
     def __init__(self, hidden_dim, decoder_layer, decoder_layer_wide, segmentation_head, num_layers, num_head, reg_max, reg_scale, up,
                  eval_idx=-1, layer_scale=2, act='relu', use_fdr_decode=True,
-                 use_aux_distribution=True, use_lqe=True):
+                 use_aux_distribution=True, use_lqe=True, use_pre_outputs=True):
         super(TransformerDecoder, self).__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
@@ -302,6 +302,7 @@ class TransformerDecoder(nn.Module):
         self.use_fdr_decode = use_fdr_decode
         self.use_aux_distribution = use_aux_distribution
         self.use_lqe = use_lqe
+        self.use_pre_outputs = use_pre_outputs
         self.eval_idx = eval_idx if eval_idx >= 0 else num_layers + eval_idx
         self.up, self.reg_scale, self.reg_max = up, reg_scale, reg_max
         self.layers = nn.ModuleList([copy.deepcopy(decoder_layer) for _ in range(self.eval_idx + 1)] \
@@ -354,6 +355,8 @@ class TransformerDecoder(nn.Module):
         dec_out_pred_corners = []
         dec_out_refs = []
         dec_out_hs = []
+        pre_bboxes = None
+        pre_scores = None
         if self.use_aux_distribution and not hasattr(self, 'project'):
             project = weighting_function(self.reg_max, up, reg_scale)
         elif self.use_aux_distribution:
@@ -375,11 +378,16 @@ class TransformerDecoder(nn.Module):
 
             output = layer(output, ref_points_input, value, spatial_shapes, attn_mask, query_pos_embed)
 
-            if i == 0 :
-                # Initial bounding box predictions with inverse sigmoid refinement
+            if i == 0 and (self.use_aux_distribution or self.use_pre_outputs):
+                if pre_bbox_head is None:
+                    raise RuntimeError('pre_bbox_head is required when FDR or pre outputs are enabled')
+                # FDR uses this initial box as its fixed distribution reference. The
+                # optional pre output is a D-FINE-specific auxiliary supervision path.
                 pre_bboxes = F.sigmoid(pre_bbox_head(output) + inverse_sigmoid(ref_points_detach))
-                pre_scores = score_head[0](output)
-                ref_points_initial = pre_bboxes.detach()
+                if self.use_pre_outputs:
+                    pre_scores = score_head[0](output)
+                if self.use_aux_distribution:
+                    ref_points_initial = pre_bboxes.detach()
 
             pred_corners = None
             if self.use_aux_distribution:
@@ -404,7 +412,7 @@ class TransformerDecoder(nn.Module):
                 dec_out_bboxes.append(inter_ref_bbox)
                 if pred_corners is not None:
                     dec_out_pred_corners.append(pred_corners)
-                dec_out_refs.append(ref_points_initial)
+                    dec_out_refs.append(ref_points_initial)
                 dec_out_hs.append(output)
 
                 if not self.training:
@@ -422,11 +430,11 @@ class TransformerDecoder(nn.Module):
             )
 
             return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits), \
-                torch.stack(dec_out_pred_corners) if dec_out_pred_corners else None, torch.stack(dec_out_refs), torch.stack(dec_out_segs), \
+                torch.stack(dec_out_pred_corners) if dec_out_pred_corners else None, torch.stack(dec_out_refs) if dec_out_refs else None, torch.stack(dec_out_segs), \
                 pre_bboxes, pre_scores, dec_out_segs[-1]
         else:
             return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits), \
-                torch.stack(dec_out_pred_corners) if dec_out_pred_corners else None, torch.stack(dec_out_refs), None, \
+                torch.stack(dec_out_pred_corners) if dec_out_pred_corners else None, torch.stack(dec_out_refs) if dec_out_refs else None, None, \
                 pre_bboxes, pre_scores, None
 
 @register()
@@ -465,6 +473,7 @@ class ECTransformer(nn.Module):
                  use_fdr_decode=True,
                  use_aux_distribution=True,
                  use_lqe=True,
+                 use_pre_outputs=True,
                  ):
         super().__init__()
         assert len(feat_channels) <= num_levels
@@ -488,6 +497,7 @@ class ECTransformer(nn.Module):
         self.use_fdr_decode = use_fdr_decode
         self.use_aux_distribution = use_aux_distribution
         self.use_lqe = use_lqe
+        self.use_pre_outputs = use_pre_outputs
 
         assert query_select_method in ('default', 'one2many', 'agnostic'), ''
         assert cross_attn_method in ('default', 'discrete'), ''
@@ -498,8 +508,8 @@ class ECTransformer(nn.Module):
         self._build_input_proj_layer(feat_channels)
 
         # Transformer module
-        self.up = nn.Parameter(torch.tensor([0.5]), requires_grad=False)
-        self.reg_scale = nn.Parameter(torch.tensor([reg_scale]), requires_grad=False)
+        self.up = nn.Parameter(torch.tensor([0.5]), requires_grad=False) if use_aux_distribution else None
+        self.reg_scale = nn.Parameter(torch.tensor([reg_scale]), requires_grad=False) if use_aux_distribution else None
         decoder_layer = TransformerDecoderLayer(hidden_dim, nhead, dim_feedforward, dropout, \
             activation, num_levels, num_points, cross_attn_method=cross_attn_method)
         decoder_layer_wide = TransformerDecoderLayer(hidden_dim, nhead, dim_feedforward, dropout, \
@@ -512,7 +522,8 @@ class ECTransformer(nn.Module):
                                           reg_max, self.reg_scale, self.up, eval_idx, layer_scale, act=activation,
                                           use_fdr_decode=use_fdr_decode,
                                           use_aux_distribution=use_aux_distribution,
-                                          use_lqe=use_lqe)
+                                          use_lqe=use_lqe,
+                                          use_pre_outputs=use_pre_outputs)
       # denoising
         self.num_denoising = num_denoising
         self.label_noise_ratio = label_noise_ratio
@@ -535,7 +546,8 @@ class ECTransformer(nn.Module):
         self.query_pos_head = MLP(4, hidden_dim, hidden_dim, 3, act=activation)
 
         # decoder head
-        self.pre_bbox_head = MLP(hidden_dim, hidden_dim, 4, 3, act=activation)
+        self.pre_bbox_head = MLP(hidden_dim, hidden_dim, 4, 3, act=activation) \
+            if use_aux_distribution or use_pre_outputs else None
         self.integral = Integral(self.reg_max) if use_aux_distribution else None
 
         self.eval_idx = eval_idx if eval_idx >= 0 else num_layers + eval_idx
@@ -586,11 +598,13 @@ class ECTransformer(nn.Module):
         init.constant_(self.enc_bbox_head.layers[-1].weight, 0)
         init.constant_(self.enc_bbox_head.layers[-1].bias, 0)
 
-        init.constant_(self.pre_bbox_head.layers[-1].weight, 0)
-        init.constant_(self.pre_bbox_head.layers[-1].bias, 0)
+        if self.pre_bbox_head is not None:
+            init.constant_(self.pre_bbox_head.layers[-1].weight, 0)
+            init.constant_(self.pre_bbox_head.layers[-1].bias, 0)
 
-        for cls_, reg_ in zip(self.dec_score_head, self.dec_bbox_head or []):
+        for cls_ in self.dec_score_head:
             init.constant_(cls_.bias, bias)
+        for reg_ in self.dec_bbox_head or []:
             if hasattr(reg_, 'layers'):
                 init.constant_(reg_.layers[-1].weight, 0)
                 init.constant_(reg_.layers[-1].bias, 0)
@@ -832,7 +846,10 @@ class ECTransformer(nn.Module):
             else:
                 out['aux_outputs'] = self._set_aux_loss(out_logits[:-1], out_bboxes[:-1])
             out['enc_aux_outputs'] = self._set_aux_loss(enc_topk_logits_list, enc_topk_bboxes_list)
-            out['pre_outputs'] = {'pred_logits': pre_logits, 'pred_boxes': pre_bboxes, 'pred_masks': pred_segs}
+            if self.use_pre_outputs:
+                if pre_logits is None or pre_bboxes is None:
+                    raise RuntimeError('pre outputs were enabled but the decoder did not produce them')
+                out['pre_outputs'] = {'pred_logits': pre_logits, 'pred_boxes': pre_bboxes, 'pred_masks': pred_segs}
             out['enc_meta'] = {'class_agnostic': self.query_select_method == 'agnostic'}
 
             if dn_meta is not None:
@@ -841,7 +858,14 @@ class ECTransformer(nn.Module):
                                                             dn_out_corners[-1], dn_out_logits[-1])
                 else:
                     out['dn_outputs'] = self._set_aux_loss(dn_out_logits, dn_out_bboxes)
-                out['dn_pre_outputs'] = {'pred_logits': dn_pre_logits, 'pred_boxes': dn_pre_bboxes, 'pred_masks': dn_pre_segs}
+                if self.use_pre_outputs:
+                    if dn_pre_logits is None or dn_pre_bboxes is None:
+                        raise RuntimeError('DN pre outputs were enabled but the decoder did not produce them')
+                    out['dn_pre_outputs'] = {
+                        'pred_logits': dn_pre_logits,
+                        'pred_boxes': dn_pre_bboxes,
+                        'pred_masks': dn_pre_segs
+                    }
                 out['dn_meta'] = dn_meta
 
         return out

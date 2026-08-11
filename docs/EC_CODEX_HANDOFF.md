@@ -21,7 +21,8 @@
 | 当前 ECDet-X 任务 | Job `843_0/1`；四卡、每卡 8、150 epochs、patience 30，分别加载 COCO 与 moreOrgan 完整检测器权重 |
 | 当前 DINOv2-S dec5 | Job `842`；四卡、每卡 8、150 epochs、patience 30，仅加载 no-register backbone，5 层 decoder 随机初始化 |
 | 严格 RF P4 | 已完成训练与 test；Best Epoch 54，mAP50-95 0.274 |
-| Git | 本轮按用户要求不做 Git 操作；不要执行 `reset --hard`、`clean` 或批量还原工作树 |
+| strict no-D-FINE | 已实现、未提交；删除 FDR/LQE/FGL/DDF/GO 与 D-FINE pre head/pre loss，保留 CDN 与 MAL |
+| Git | 用户已重新启用 Git 操作；仍不得执行 `reset --hard`、`clean` 或批量还原工作树 |
 
 当前优先监控 `842/843`，不要重复提交同配置、同输出目录任务：
 
@@ -183,6 +184,7 @@ moreOrgan checkpoint 额外含 9 个 `_feataug_crop_head.*` 张量。当前仓�
 
 - `ecdet_l_dinov2s_patch16_dec3_liver.yml`：当前 DINOv2-S/patch16/dec3 liver 基线。
 - `..._no_cdn.yml`、`..._no_fdr_decode.yml`、`..._no_go_ddf.yml`、`..._no_fdr_no_go_ddf.yml`、`..._no_mosaic.yml`：第一阶段训练机制消融。
+- `..._no_dfine_ignore9.yml`：strict-9 的算法意义 no-D-FINE 对照；`use_pre_outputs=false` 会同时删除 D-FINE pre head、`pre_outputs`、`dn_pre_outputs` 和所有 `*_pre` loss，CDN/MAL 保留。
 - `..._rf_neck.yml`：EC-compatible RF 三尺度 neck。
 - `..._rf_neck_p4_ignore9.yml`：严格 RF P4、IdentityEncoder、single-level decoder、9 类训练。
 - `run_ecdet_l_dinov2s_patch16_dec3_liver_dfine_ablation.sh`：统一 runner，按实验名选配置和 test JSON；strict P4 使用 `test_ignore_9_12.json`。
