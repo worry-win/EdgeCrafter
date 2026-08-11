@@ -76,6 +76,19 @@ export PYTHONPATH="$ROOT_DIR/ecdetseg${PYTHONPATH:+:$PYTHONPATH}"
 export PYTHONFAULTHANDLER=1
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"
 
+# Dataloader workers use shared-memory file descriptors. The default remote
+# shell limit can be 1024, which causes rank-specific worker failure under the
+# two-GPU FDR jobs and leaves the other rank waiting in a collective.
+NOFILE_LIMIT="${NOFILE_LIMIT:-65536}"
+CURRENT_NOFILE="$(ulimit -n)"
+if [[ "$CURRENT_NOFILE" != unlimited && "$CURRENT_NOFILE" -lt "$NOFILE_LIMIT" ]]; then
+  ulimit -n "$NOFILE_LIMIT" 2>/dev/null || {
+    echo "Unable to raise file-descriptor limit from $CURRENT_NOFILE to $NOFILE_LIMIT" >&2
+    exit 1
+  }
+fi
+echo "ulimit -n: $(ulimit -n)"
+
 echo "Start: $(date)"
 echo "Experiment: $EXPERIMENT"
 echo "Config: $CONFIG"
