@@ -1,0 +1,19 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_ec_full_ignore9.yml',
+]
+
+# Auxiliary diagnostic: retain GO matching with a continuous-box decoder.
+# FDR and all components that consume its distribution are absent.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_continuous_with_go_ignore9
+
+ECTransformer:
+  use_fdr_decode: false
+  use_aux_distribution: false
+  use_lqe: false
+  use_pre_outputs: false
+
+ECCriterion:
+  losses: ['mal', 'boxes']
+  use_uni_set: true
+  use_fgl: false
+  use_ddf: false
