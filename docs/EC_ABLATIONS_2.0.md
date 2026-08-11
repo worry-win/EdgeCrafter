@@ -153,7 +153,23 @@ criterion 不计算任何 loss_*_dn_* 或 loss_*_dn_pre
 
 当前实现中 `decoder.forward()` 调用 CDN 构造函数时将 `box_noise_scale` 传为常数 `1.0`。当前实验配置也是 `1.0`，所以已有结果不受影响；如果以后要比较不同 box noise scale，需要先修正为读取配置字段。
 
-## 二、D-FINE / GO-DDF 三组消融
+## 二、D-FINE 主模块：FDR 与 GO-LSD
+
+D-FINE 的主要算法模块应按论文术语归纳为：
+
+```text
+FDR    = Fine-grained Distribution Refinement
+GO-LSD = Global Optimal Localization Self-Distillation
+```
+
+当前代码没有名为 `GO-LSD` 的单一类或单一 loss；它由两个开关共同实现：
+
+```text
+GO  (Global Optimal matching)       -> use_uni_set
+LSD (Localization Self-Distillation)-> use_ddf
+```
+
+因此已有配置名 `no_go_ddf` 在算法含义上应阅读为 **GO-LSD-off**：它同时关闭全局最优匹配集合和定位自蒸馏。本文保留该配置文件名，以便和现有任务、输出目录兼容。
 
 ### 2.1 组件依赖关系
 
@@ -185,8 +201,8 @@ GO union
 
 | 实验 | FDR/FGL | DDF | GO union | pre path | CDN | 结论口径 |
 |---|---|---|---|---|---|---|
-| `no_go_ddf` | 保留 | 删除 | 删除 | 保留 | 保留 | FDR/FGL 保持，组合去掉 GO 与 DDF |
-| `no_fdr_no_go_ddf` | 删除 | 删除 | 删除 | 仍保留 | 保留 | continuous box + no FDR/FGL/DDF/GO，但不是完整 no-D-FINE |
+| `no_go_ddf` | 保留 | 删除 | 删除 | 保留 | 保留 | FDR/FGL 保持，GO-LSD-off |
+| `no_fdr_no_go_ddf` | 删除 | 删除 | 删除 | 仍保留 | 保留 | FDR + GO-LSD-off 的 continuous-box 对照，但不是完整 no-D-FINE |
 | `no_dfine_ignore9` | 删除 | 删除 | 删除 | 删除 | 保留 | strict no-D-FINE，对照 CDN 保持开启 |
 
 下面分别说明各组的配置、loss、实现方式和可归因问题。
@@ -251,11 +267,11 @@ loss_ddf_dn_*
 
 > 在 FDR/FGL 完全保留的前提下，去掉 DDF 和跨层 GO matching 后，模型性能如何变化。
 
-它可以反映 GO 与 DDF 组合对训练监督和中间层优化的贡献。
+它可以反映 GO-LSD 对训练监督和中间层定位优化的贡献。
 
 #### 不能说明的问题
 
-它不能单独归因于 GO，也不能说明 FDR 是否重要，因为 FDR 和 FGL 仍然存在。由于 GO 与 DDF 同时关闭，结果也不是一个严格的单因素 GO 消融。
+它不能单独归因于 GO，也不能说明 FDR 是否重要，因为 FDR 和 FGL 仍然存在。由于 GO 与 LSD 同时关闭，结果也不是一个严格的单因素 GO 消融。
 
 ### 2.4 `no_fdr_no_go_ddf`
 
@@ -361,7 +377,7 @@ CDN 仍然为每个 decoder 层产生 `loss_mal_dn_i`、`loss_bbox_dn_i`、`loss
 
 该实验测量：
 
-> 在 ECTransformer 中使用连续 4D box regression、同时移除 FDR/FGL/DDF/GO 后，保留 D-FINE pre auxiliary path 和 CDN 时的性能。
+> 在 ECTransformer 中使用连续 4D box regression、同时移除 FDR 及 GO-LSD 后，保留 D-FINE pre auxiliary path 和 CDN 时的性能。
 
 它比 `no_fdr_decode` 更接近 distribution-free decoder，但不能将结果表述为“完整移除 D-FINE”。
 
@@ -447,7 +463,7 @@ loss_*_dn_pre
 
 该实验测量：
 
-> 在保留 EC attention、MAL、CDN 和基本 box losses 的前提下，完整移除 D-FINE 的 FDR distribution、FGL、DDF、LQE、GO union以及 pre auxiliary path 后，模型性能如何变化。
+> 在保留 EC attention、MAL、CDN 和基本 box losses 的前提下，完整移除 D-FINE 的 FDR distribution、FGL、GO-LSD、LQE 和 pre auxiliary path 后，模型性能如何变化。
 
 它是 D-FINE family 的完整算法对照，但仍不是 RF-DETR decoder，也不能直接解释成 RF baseline。
 
@@ -456,14 +472,14 @@ loss_*_dn_pre
 三组实验不是完全正交的四格 factorial 设计：
 
 ```text
-no_go_ddf          = FDR/FGL 保留，GO + DDF 删除
-no_fdr_no_go_ddf   = FDR/FGL/GO/DDF 删除，pre 保留
-no_dfine_ignore9   = FDR/FGL/GO/DDF/pre 全部删除
+no_go_ddf          = FDR/FGL 保留，GO-LSD 删除
+no_fdr_no_go_ddf   = FDR/FGL/GO-LSD 删除，pre 保留
+no_dfine_ignore9   = FDR/FGL/GO-LSD/pre 全部删除
 ```
 
 因此应按以下方式解读：
 
-1. `no_go_ddf` 与 EC-full 的差异，反映 GO+DDF 组合的贡献，不能单独拆成 GO 或 DDF 的贡献。
+1. `no_go_ddf` 与 EC-full 的差异，反映 GO-LSD 的贡献，不能单独拆成 GO 或 LSD 的贡献。
 2. `no_fdr_no_go_ddf` 与 `no_go_ddf` 的差异，同时混合了 FDR/FGL 删除和 continuous box regression 替换，且还涉及 pre path 的相对影响，不能只归因于 FDR。
 3. `no_dfine_ignore9` 与 `no_fdr_no_go_ddf` 的差异，主要用于识别 D-FINE pre head/pre loss 的额外贡献。
 4. `no_dfine_ignore9` 与 EC-full 的差异，才是当前代码下最完整的 D-FINE family 对照。
@@ -475,7 +491,7 @@ EC - GO：只设置 use_uni_set=false，保留 FDR/FGL/DDF
 EC - FDR-family + GO：删除 distribution/FGL/DDF/LQE，保留 use_uni_set=true
 ```
 
-注意，原始 DDF 依赖 FDR distribution，因此“完全删除 FDR、同时保留原始 DDF”在当前定义下不可实现；除非另行设计连续 box distillation loss，但那就不再是原始 DDF。
+注意，GO-LSD 的 LSD 部分（原始 DDF）依赖 FDR distribution。因此“完全删除 FDR、同时完整保留 GO-LSD”在当前定义下不可实现；FDR-off 时可以保留 GO，但 DDF 必须删除。除非另行设计连续 box distillation loss，但那就不再是原始 GO-LSD。
 
 ### 2.7 运行时消融审计
 
