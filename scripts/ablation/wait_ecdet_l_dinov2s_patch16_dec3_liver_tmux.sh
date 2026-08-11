@@ -6,6 +6,7 @@ TMUX_BIN="${TMUX_BIN:-$ROOT_DIR/.local/bin/tmux}"
 TMUX_LIB_DIR="${TMUX_LIB_DIR:-$ROOT_DIR/.local/lib}"
 export LD_LIBRARY_PATH="$TMUX_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 TRAIN_SCRIPT="${TRAIN_SCRIPT:-$ROOT_DIR/scripts/ablation/run_ecdet_l_dinov2s_patch16_dec3_liver.sh}"
+TRAIN_OUTPUT_DIR="${TRAIN_OUTPUT_DIR:-}"
 SESSION_NAME="${TMUX_SESSION:-ecdet_l_dinov2s_dec3_liver}"
 POLL_INTERVAL_SEC="${POLL_INTERVAL_SEC:-300}"
 REQUIRED_GPU_COUNT="${REQUIRED_GPU_COUNT:-4}"
@@ -43,7 +44,11 @@ free_gpu_indices() {
 launch_training() {
   local node="$1"
   local gpu_csv="$2"
-  local train_command="EC_ABLATION_EXPERIMENT=$EC_ABLATION_EXPERIMENT CUDA_VISIBLE_DEVICES=$gpu_csv NPROC_PER_NODE=$REQUIRED_GPU_COUNT bash '$TRAIN_SCRIPT'"
+  local output_assignment=""
+  if [[ -n "$TRAIN_OUTPUT_DIR" ]]; then
+    output_assignment="OUTPUT_DIR='$TRAIN_OUTPUT_DIR' "
+  fi
+  local train_command="EC_ABLATION_EXPERIMENT=$EC_ABLATION_EXPERIMENT CUDA_VISIBLE_DEVICES=$gpu_csv NPROC_PER_NODE=$REQUIRED_GPU_COUNT SEED=${SEED:-42} ${output_assignment} bash '$TRAIN_SCRIPT'"
 
   if [[ "$node" == "$current_node" ]]; then
     env LD_LIBRARY_PATH="$LD_LIBRARY_PATH" "$TMUX_BIN" new-session -d -s "$SESSION_NAME" "$train_command"

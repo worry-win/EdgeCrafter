@@ -1,0 +1,25 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_ec_full_ignore9.yml',
+]
+
+# Strict 9-class DINOv2-S no-register baseline with only the decoder depth
+# changed from 3 to 4. The backbone is pretrained; projection, neck, decoder
+# and detection heads are initialized from the current random seed.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec4_liver_ignore9
+
+ECTransformer:
+  num_layers: 4
+  eval_idx: -1
+  num_levels: 3
+  num_points: [3, 6, 3]
+  cross_attn_method: default
+
+epochs: 150
+early_stop_patience: 30
+early_stop_min_delta: 0.0
+
+train_dataloader:
+  total_batch_size: 32
+
+val_dataloader:
+  total_batch_size: 32

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-python}"
-EXPERIMENT="${EC_ABLATION_EXPERIMENT:?Set EC_ABLATION_EXPERIMENT=no_fdr_decode|no_go_ddf|no_fdr_no_go_ddf|no_dfine_ignore9|no_mosaic|rf_neck|rf_neck_p4_ignore9|ec_full_ignore9}"
+EXPERIMENT="${EC_ABLATION_EXPERIMENT:?Set EC_ABLATION_EXPERIMENT=no_fdr_decode|no_go_ddf|no_fdr_no_go_ddf|no_dfine_ignore9|no_mosaic|rf_neck|rf_neck_p4_ignore9|ec_full_ignore9|baseline_dec4_ignore9|baseline_dec5_ignore9}"
 DATA_ROOT="/cobot/Data/Lesion_det/det_liver"
 SEED="${SEED:-42}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-4}"
@@ -33,11 +33,17 @@ case "$EXPERIMENT" in
   ec_full_ignore9)
     CONFIG="$ROOT_DIR/ecdetseg/configs/ecdet/ecdet_l_dinov2s_patch16_dec3_liver_ec_full_ignore9.yml"
     DEFAULT_OUTPUT="$ROOT_DIR/outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_ec_full_ignore9" ;;
+  baseline_dec4_ignore9)
+    CONFIG="$ROOT_DIR/ecdetseg/configs/ecdet/ecdet_l_dinov2s_patch16_dec4_liver_ignore9.yml"
+    DEFAULT_OUTPUT="$ROOT_DIR/outputs/ablation/ecdet_l_dinov2s_patch16_dec4_liver_baseline_2gpu_seed42" ;;
+  baseline_dec5_ignore9)
+    CONFIG="$ROOT_DIR/ecdetseg/configs/ecdet/ecdet_l_dinov2s_patch16_dec5_liver_ignore9.yml"
+    DEFAULT_OUTPUT="$ROOT_DIR/outputs/ablation/ecdet_l_dinov2s_patch16_dec5_liver_baseline_2gpu_seed42" ;;
   *) echo "Unknown EC_ABLATION_EXPERIMENT=$EXPERIMENT" >&2; exit 2 ;;
 esac
 OUTPUT_DIR="${OUTPUT_DIR:-$DEFAULT_OUTPUT}"
 TEST_ANN_FILE="$DATA_ROOT/annotations/test.json"
-if [[ "$EXPERIMENT" == rf_neck_p4_ignore9 || "$EXPERIMENT" == ec_full_ignore9 || "$EXPERIMENT" == no_dfine_ignore9 ]]; then
+if [[ "$EXPERIMENT" == rf_neck_p4_ignore9 || "$EXPERIMENT" == ec_full_ignore9 || "$EXPERIMENT" == no_dfine_ignore9 || "$EXPERIMENT" == baseline_dec4_ignore9 || "$EXPERIMENT" == baseline_dec5_ignore9 ]]; then
   TEST_ANN_FILE="$DATA_ROOT/annotations/test_ignore_9_12.json"
 fi
 
@@ -50,7 +56,7 @@ for path in "$CONFIG" "$DATA_ROOT/img" "$DATA_ROOT/annotations/train.json" \
   "/cobot/Code/xiangshaochong/checkpoints/dinov2/dinov2_vits14_pretrain.pth"; do
   test -e "$path" || { echo "Missing required path: $path" >&2; exit 1; }
 done
-if [[ "$EXPERIMENT" == rf_neck_p4_ignore9 || "$EXPERIMENT" == ec_full_ignore9 || "$EXPERIMENT" == no_dfine_ignore9 ]]; then
+if [[ "$EXPERIMENT" == rf_neck_p4_ignore9 || "$EXPERIMENT" == ec_full_ignore9 || "$EXPERIMENT" == no_dfine_ignore9 || "$EXPERIMENT" == baseline_dec4_ignore9 || "$EXPERIMENT" == baseline_dec5_ignore9 ]]; then
   for path in "$DATA_ROOT/annotations/train_ignore_9_12.json" \
     "$DATA_ROOT/annotations/valid_ignore_9_12.json" "$TEST_ANN_FILE"; do
     test -e "$path" || { echo "Missing strict 9-class annotation: $path" >&2; exit 1; }
