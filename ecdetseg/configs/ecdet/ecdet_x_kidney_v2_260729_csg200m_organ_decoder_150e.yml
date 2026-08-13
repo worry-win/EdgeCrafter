@@ -1,0 +1,20 @@
+__include__: [
+  'ecdet_x_kidney_v2_260729_csg200m_coco_decoder_150e.yml',
+]
+
+# Match the FeatAug crop branch stored in the organ-decoder checkpoint.
+output_dir: outputs/ablation/ecdet_x_kidney_v2_260729_csg200m_organ_decoder_150e
+
+feataug_enable: true
+feataug_types: [fc]
+feataug_prob: 1.0
+feataug_crop_min_scale: 0.6
+feataug_crop_max_scale: 1.0
+feataug_loss_weight: 1.0
+feataug_base_weight: 1.0
+feataug_norm_total: true
+use_prototypes: false
+num_prototypes: 6
+has_contrast: false
+proto_loss_coef: 0.2
+contrast_loss_coef: 0.2

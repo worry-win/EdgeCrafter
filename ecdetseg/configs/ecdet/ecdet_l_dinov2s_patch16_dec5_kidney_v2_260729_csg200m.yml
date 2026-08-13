@@ -1,0 +1,9 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m.yml',
+]
+
+# Decoder-depth single-variable comparison on CSG-200m images: 3 -> 5 layers.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec5_kidney_v2_260729_csg200m
+
+ECTransformer:
+  num_layers: 5

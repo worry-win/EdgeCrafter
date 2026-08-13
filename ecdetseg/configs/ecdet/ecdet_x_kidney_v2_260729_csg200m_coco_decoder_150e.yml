@@ -1,0 +1,34 @@
+__include__: [
+  'ecdet_x.yml',
+]
+
+# ECDet-X fine-tuning from the COCO decoder checkpoint on CSG-200m kidney images.
+output_dir: outputs/ablation/ecdet_x_kidney_v2_260729_csg200m_coco_decoder_150e
+num_classes: 6
+remap_mscoco_category: false
+
+epochs: 150
+early_stop_patience: 30
+early_stop_min_delta: 0.0
+checkpoint_freq: 5
+
+train_dataloader:
+  total_batch_size: 32
+  num_workers: 8
+  dataset:
+    img_folder: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/images_CSG_200m
+    ann_file: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/annotations/v2_260729/train.json
+    transforms:
+      mosaic_epoch: 24
+      mosaic_prob: 1.0
+      stop_epoch: 148
+  collate_fn:
+    mixup_prob: 1.0
+    mixup_epoch: 24
+
+val_dataloader:
+  total_batch_size: 32
+  num_workers: 8
+  dataset:
+    img_folder: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/images_CSG_200m
+    ann_file: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/annotations/v2_260729/val.json

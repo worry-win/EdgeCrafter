@@ -21,6 +21,44 @@ from ..misc import MetricLogger, SmoothedValue, dist_utils
 from ..optim import ModelEMA
 
 
+def _max_macro_pr_curve_f1(precision, recalls):
+    valid = precision > -1
+    if not valid.any():
+        return -1.0, -1.0
+    p_sum = np.where(valid, precision, 0.0).sum(axis=1)
+    p_count = valid.sum(axis=1)
+    p_mean = np.divide(p_sum, p_count, out=np.zeros_like(p_sum), where=p_count > 0)
+    f1 = 2 * p_mean * recalls / np.maximum(p_mean + recalls, 1e-12)
+    index = int(np.argmax(f1))
+    return float(f1[index]), float(recalls[index])
+
+
+def summarize_pr_curve_f1(coco_eval):
+    """Summarize maximum macro-F1 across the standard COCO IoU sweep."""
+    precision = coco_eval.eval['precision'][:, :, :, 0, -1]
+    recalls = coco_eval.params.recThrs
+    iou_thresholds = coco_eval.params.iouThrs
+    target_thresholds = np.arange(0.50, 0.951, 0.05)
+
+    f1_by_iou = []
+    recall_by_iou = []
+    for threshold in target_thresholds:
+        matches = np.flatnonzero(np.isclose(iou_thresholds, threshold))
+        if len(matches) != 1:
+            raise ValueError(f"COCO evaluator is missing IoU threshold {threshold:.2f}")
+        f1, recall = _max_macro_pr_curve_f1(precision[matches[0]], recalls)
+        f1_by_iou.append(f1)
+        recall_by_iou.append(recall)
+
+    return {
+        'f1_iou50': f1_by_iou[0],
+        'recall_iou50': recall_by_iou[0],
+        'f1_iou95': f1_by_iou[-1],
+        'recall_iou95': recall_by_iou[-1],
+        'f1_iou50_95_mean': float(np.mean(f1_by_iou)),
+    }
+
+
 def train_one_epoch(self_lr_scheduler, lr_scheduler, model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, max_norm: float = 0, **kwargs):
@@ -166,20 +204,6 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
         coco_evaluator.accumulate()
         coco_evaluator.summarize()
 
-    def _pr_curve_f1(coco_eval):
-        """Maximum macro-F1 on the COCO IoU=.50 precision-recall curve."""
-        precision = coco_eval.eval['precision'][0, :, :, 0, -1]
-        recalls = coco_eval.params.recThrs
-        valid = precision > -1
-        if not valid.any():
-            return -1.0, -1.0
-        p_sum = np.where(valid, precision, 0.0).sum(axis=1)
-        p_count = valid.sum(axis=1)
-        p_mean = np.divide(p_sum, p_count, out=np.zeros_like(p_sum), where=p_count > 0)
-        f1 = 2 * p_mean * recalls / np.maximum(p_mean + recalls, 1e-12)
-        index = int(np.argmax(f1))
-        return float(f1[index]), float(recalls[index])
-
     stats = {}
     # stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
     if coco_evaluator.labels is not None:
@@ -231,9 +255,23 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
             stats['coco_eval_mask'] = coco_evaluator.coco_eval['segm'].stats.tolist()
         elif 'bbox' in iou_types:
             stats['coco_eval_bbox'] = coco_evaluator.coco_eval['bbox'].stats.tolist()
-            f1, f1_recall = _pr_curve_f1(coco_evaluator.coco_eval['bbox'])
-            stats['coco_eval_bbox_f1'] = f1
-            stats['coco_eval_bbox_f1_recall'] = f1_recall
-            print(f"bbox-macro-F1@IoU50(PR-curve): {f1:.6f} (recall-grid={f1_recall:.3f})")
+            f1 = summarize_pr_curve_f1(coco_evaluator.coco_eval['bbox'])
+            stats['coco_eval_bbox_f1'] = f1['f1_iou50']
+            stats['coco_eval_bbox_f1_recall'] = f1['recall_iou50']
+            stats['coco_eval_bbox_f1_iou95'] = f1['f1_iou95']
+            stats['coco_eval_bbox_f1_iou95_recall'] = f1['recall_iou95']
+            stats['coco_eval_bbox_f1_iou50_95_mean'] = f1['f1_iou50_95_mean']
+            print(
+                f"bbox-macro-F1@IoU50(PR-curve): {f1['f1_iou50']:.6f} "
+                f"(recall-grid={f1['recall_iou50']:.3f})"
+            )
+            print(
+                f"bbox-macro-F1@IoU95(PR-curve): {f1['f1_iou95']:.6f} "
+                f"(recall-grid={f1['recall_iou95']:.3f})"
+            )
+            print(
+                "bbox-macro-F1@IoU50:95(PR-curve mean): "
+                f"{f1['f1_iou50_95_mean']:.6f}"
+            )
 
     return stats, coco_evaluator

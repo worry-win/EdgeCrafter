@@ -1,0 +1,15 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729.yml',
+]
+
+# CSG-200m image control. Annotations and all training/model settings are
+# inherited unchanged from the kidney v2_260729 decoder-depth baseline.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m
+
+train_dataloader:
+  dataset:
+    img_folder: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/images_CSG_200m
+
+val_dataloader:
+  dataset:
+    img_folder: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/images_CSG_200m

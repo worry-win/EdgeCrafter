@@ -18,6 +18,7 @@ import warnings
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import argparse
+import torch.multiprocessing as mp
 
 from engine.core import YAMLConfig, yaml_utils
 from engine.misc import dist_utils
@@ -38,6 +39,7 @@ if debug:
 def main(args, ) -> None:
     """main
     """
+    mp.set_sharing_strategy('file_system')
     dist_utils.setup_distributed(args.print_rank, args.print_method, seed=args.seed)
 
     assert not all([args.tuning, args.resume]), \

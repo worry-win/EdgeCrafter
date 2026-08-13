@@ -1,0 +1,21 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver.yml',
+]
+
+# Kidney v2_260729 control. Model, optimizer, augmentations, and schedule are
+# inherited unchanged from the prior DINOv2-S patch16 decoder-depth baseline.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729
+num_classes: 6
+
+DinoV2Adapter:
+  weights_path: /opt/wanrui/EdgeCrafter/artifacts/checkpoints/dinov2/dinov2_vits14_pretrain.pth
+
+train_dataloader:
+  dataset:
+    img_folder: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/images
+    ann_file: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/annotations/v2_260729/train.json
+
+val_dataloader:
+  dataset:
+    img_folder: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/images
+    ann_file: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/annotations/v2_260729/val.json
