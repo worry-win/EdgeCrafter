@@ -1,0 +1,19 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec5_liver_ignore9.yml',
+]
+
+# Decoder-depth x D-FINE endpoint: retain the 5-layer EC decoder, MAL and CDN,
+# while removing the complete D-FINE distribution/GO/pre-output family.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec5_liver_no_dfine_ignore9_bs32_2gpu_seed42
+
+ECTransformer:
+  use_fdr_decode: false
+  use_aux_distribution: false
+  use_lqe: false
+  use_pre_outputs: false
+
+ECCriterion:
+  losses: ['mal', 'boxes']
+  use_uni_set: false
+  use_fgl: false
+  use_ddf: false

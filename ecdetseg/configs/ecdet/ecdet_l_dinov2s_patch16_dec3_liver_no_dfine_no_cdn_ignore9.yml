@@ -1,0 +1,10 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_no_dfine_ignore9.yml',
+]
+
+# D-FINE x CDN endpoint: strict no-D-FINE plus denoising disabled. MAL,
+# 3-layer EC decoder, neck, augmentation and training schedule stay unchanged.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_no_dfine_no_cdn_ignore9_bs32_2gpu_seed42
+
+ECTransformer:
+  num_denoising: 0

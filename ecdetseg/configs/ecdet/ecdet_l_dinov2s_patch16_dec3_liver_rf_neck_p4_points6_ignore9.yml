@@ -1,0 +1,11 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_rf_neck_p4_ignore9.yml',
+]
+
+# Paired neck ablation: keep the strict RF P4 projector/IdentityEncoder
+# interface, but use six EC deformable-attention sampling points per head on
+# the single P4 level. This is still an EC decoder, not an RF decoder.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_rf_neck_p4_points6_ignore9_bs32_2gpu_seed42
+
+ECTransformer:
+  num_points: [6]

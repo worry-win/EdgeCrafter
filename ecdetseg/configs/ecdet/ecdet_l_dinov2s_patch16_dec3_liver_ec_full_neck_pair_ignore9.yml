@@ -1,0 +1,7 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_ec_full_ignore9.yml',
+]
+
+# Fresh, paired EC-full control for the strict RF-neck P4 points=6 run.
+# Only the output directory differs from the established strict-9 EC-full.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_liver_ec_full_neck_pair_ignore9_bs32_2gpu_seed42
