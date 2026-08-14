@@ -9,6 +9,7 @@ Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 
 import math
 import sys
+import warnings
 from typing import Iterable
 
 import numpy as np
@@ -19,6 +20,7 @@ from torch.utils.tensorboard import SummaryWriter
 from ..data import CocoEvaluator
 from ..misc import MetricLogger, SmoothedValue, dist_utils
 from ..optim import ModelEMA
+from .metrics_format import format_yolo_per_class_metrics_table
 
 
 def _max_macro_pr_curve_f1(precision, recalls):
@@ -56,6 +58,139 @@ def summarize_pr_curve_f1(coco_eval):
         'f1_iou95': f1_by_iou[-1],
         'recall_iou95': recall_by_iou[-1],
         'f1_iou50_95_mean': float(np.mean(f1_by_iou)),
+    }
+
+
+def summarize_yolo_pr_curve_metrics(coco_eval, coco_gt):
+    """Select an independent best PR operating point for every category."""
+    precisions = coco_eval.eval.get('precision')
+    scores = coco_eval.eval.get('scores')
+    if precisions is None or scores is None:
+        warnings.warn(
+            'Skipping WZW-aligned F1 because COCO precision/scores are unavailable.',
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return None
+
+    rec_thrs = coco_eval.params.recThrs
+    iou_thrs = np.asarray(coco_eval.params.iouThrs)
+    cat_ids = list(coco_eval.params.catIds)
+    iou50_idx = int(np.argmin(np.abs(iou_thrs - 0.50)))
+    iou95_idx = int(np.argmin(np.abs(iou_thrs - 0.95)))
+    if not (
+        np.isclose(iou_thrs[iou50_idx], 0.50)
+        and np.isclose(iou_thrs[iou95_idx], 0.95)
+    ):
+        warnings.warn(
+            'Skipping WZW-aligned F1 because COCO IoU thresholds 0.50 and 0.95 '
+            'are required.',
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return None
+
+    def best_at_iou(iou_idx, class_idx):
+        p_curve = precisions[iou_idx, :, class_idx, 0, -1]
+        s_curve = scores[iou_idx, :, class_idx, 0, -1]
+        valid = p_curve > -1
+        if not np.any(valid):
+            return {
+                'precision': 0.0,
+                'recall': 0.0,
+                'f1': 0.0,
+                'confidence': 0.0,
+                'ap': 0.0,
+            }
+
+        p_valid = p_curve[valid]
+        r_valid = rec_thrs[valid]
+        s_valid = s_curve[valid]
+        f1_curve = 2 * p_valid * r_valid / (p_valid + r_valid + 1e-16)
+        best_idx = int(np.argmax(f1_curve))
+        return {
+            'precision': float(p_valid[best_idx]),
+            'recall': float(r_valid[best_idx]),
+            'f1': float(f1_curve[best_idx]),
+            'confidence': float(s_valid[best_idx]),
+            'ap': float(np.mean(p_valid)),
+        }
+
+    def aggregate(class_metrics):
+        # This matches the target algorithm, but excluding fully failed classes
+        # can make the aggregate F1 optimistic.
+        valid = [metric for metric in class_metrics if metric['f1'] > 0]
+        if not valid:
+            return {
+                'precision': 0.0,
+                'recall': 0.0,
+                'f1': 0.0,
+                'map50': 0.0,
+            }
+
+        mean_p = float(np.mean([metric['precision'] for metric in valid]))
+        mean_r = float(np.mean([metric['recall'] for metric in valid]))
+        return {
+            'precision': mean_p,
+            'recall': mean_r,
+            'f1': float(2 * mean_p * mean_r / (mean_p + mean_r + 1e-16)),
+            'map50': float(np.mean([metric['ap'] for metric in valid])),
+        }
+
+    metrics_by_iou = [
+        [
+            best_at_iou(iou_idx, class_idx)
+            for class_idx in range(len(cat_ids))
+        ]
+        for iou_idx in range(len(iou_thrs))
+    ]
+    overall50 = aggregate(metrics_by_iou[iou50_idx])
+    overall95 = aggregate(metrics_by_iou[iou95_idx])
+    overall5095 = {
+        key: float(np.mean([
+            aggregate(class_metrics)[key]
+            for class_metrics in metrics_by_iou
+        ]))
+        for key in ('precision', 'recall', 'f1', 'map50')
+    }
+
+    cats = coco_gt.loadCats(cat_ids)
+    cat_name_by_id = {
+        int(cat['id']): cat.get('name', str(cat['id']))
+        for cat in cats
+    }
+    yolo_per_class = {}
+    for class_idx, cat_id in enumerate(cat_ids):
+        metric50 = metrics_by_iou[iou50_idx][class_idx]
+        metric95 = metrics_by_iou[iou95_idx][class_idx]
+        f1_5095 = float(np.mean([
+            metrics[class_idx]['f1']
+            for metrics in metrics_by_iou
+        ]))
+        cat_id = int(cat_id)
+        yolo_per_class[cat_id] = {
+            'name': cat_name_by_id.get(cat_id, str(cat_id)),
+            'precision': metric50['precision'],
+            'recall': metric50['recall'],
+            'f1': metric50['f1'],
+            'confidence': metric50['confidence'],
+            'map50': metric50['ap'],
+            'f1_iou95': metric95['f1'],
+            'f1_iou50_95': f1_5095,
+        }
+
+    return {
+        'yolo_per_class': yolo_per_class,
+        'yolo_overall': overall50,
+        'yolo_f1_iou50': overall50,
+        'yolo_f1_iou95': overall95,
+        'yolo_f1_iou50_95': overall5095,
+        'yolo_overall_prf_map50': [
+            overall50['precision'],
+            overall50['recall'],
+            overall50['f1'],
+            overall50['map50'],
+        ],
     }
 
 
@@ -273,5 +408,29 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
                 "bbox-macro-F1@IoU50:95(PR-curve mean): "
                 f"{f1['f1_iou50_95_mean']:.6f}"
             )
+
+            yolo_stats = summarize_yolo_pr_curve_metrics(
+                coco_evaluator.coco_eval['bbox'],
+                coco_evaluator.coco_gt,
+            )
+            if yolo_stats is not None:
+                stats.update(yolo_stats)
+                overall50 = yolo_stats['yolo_f1_iou50']
+                overall95 = yolo_stats['yolo_f1_iou95']
+                overall5095 = yolo_stats['yolo_f1_iou50_95']
+                print(
+                    f"[YOLO Overall] "
+                    f"P={overall50['precision']:.4f}, "
+                    f"R={overall50['recall']:.4f}, "
+                    f"F1@0.50={overall50['f1']:.4f}, "
+                    f"F1@0.95={overall95['f1']:.4f}, "
+                    f"F1@50:95={overall5095['f1']:.4f}, "
+                    f"mAP@50={overall50['map50']:.4f}"
+                )
+                table = format_yolo_per_class_metrics_table(
+                    yolo_stats['yolo_per_class']
+                )
+                if table is not None:
+                    print(table)
 
     return stats, coco_evaluator

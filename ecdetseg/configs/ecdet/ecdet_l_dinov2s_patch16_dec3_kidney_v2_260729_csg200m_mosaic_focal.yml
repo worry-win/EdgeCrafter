@@ -1,0 +1,12 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m.yml',
+]
+
+# Classification-loss ablation: keep Mosaic and replace MAL with Focal Loss.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_mosaic_focal
+
+ECCriterion:
+  weight_dict: {loss_focal: 1, loss_bbox: 5, loss_giou: 2, loss_fgl: 0.15, loss_ddf: 1.5}
+  losses: ['focal', 'boxes', 'local']
+  alpha: 0.25
+  gamma: 2.0

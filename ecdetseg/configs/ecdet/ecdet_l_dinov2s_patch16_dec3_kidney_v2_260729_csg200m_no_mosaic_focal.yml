@@ -1,0 +1,11 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_mosaic_focal.yml',
+]
+
+# Combined augmentation/loss control: Focal Loss with Mosaic disabled.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_no_mosaic_focal
+
+train_dataloader:
+  dataset:
+    transforms:
+      mosaic_prob: 0.0

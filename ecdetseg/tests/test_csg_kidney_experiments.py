@@ -28,6 +28,171 @@ def _resolved_config(name: str) -> dict:
 
 
 class CsgKidneyExperimentConfigTest(unittest.TestCase):
+    def test_csg_no_cdn_changes_only_denoising_and_output_directory(self):
+        baseline = _resolved_config(
+            "ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m.yml"
+        )
+        no_cdn = _resolved_config(
+            "ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_no_cdn.yml"
+        )
+
+        self.assertEqual(no_cdn["ECTransformer"]["num_denoising"], 0)
+
+        comparable_baseline = deepcopy(baseline)
+        comparable_no_cdn = deepcopy(no_cdn)
+        comparable_baseline.pop("__include__", None)
+        comparable_no_cdn.pop("__include__", None)
+        comparable_baseline["ECTransformer"]["num_denoising"] = 0
+        comparable_baseline["output_dir"] = comparable_no_cdn["output_dir"]
+        self.assertEqual(comparable_no_cdn, comparable_baseline)
+
+    def test_csg_no_go_lsd_keeps_fdr_and_disables_go_lsd(self):
+        config = _resolved_config(
+            "ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_no_go_lsd.yml"
+        )
+
+        self.assertTrue(config["ECTransformer"]["use_fdr_decode"])
+        self.assertTrue(config["ECTransformer"]["use_aux_distribution"])
+        self.assertTrue(config["ECTransformer"]["use_lqe"])
+        self.assertTrue(config["ECCriterion"]["use_fgl"])
+        self.assertFalse(config["ECCriterion"]["use_uni_set"])
+        self.assertFalse(config["ECCriterion"]["use_ddf"])
+
+    def test_csg_no_dfine_removes_the_complete_dfine_family(self):
+        config = _resolved_config(
+            "ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_no_dfine.yml"
+        )
+
+        self.assertFalse(config["ECTransformer"]["use_fdr_decode"])
+        self.assertFalse(config["ECTransformer"]["use_aux_distribution"])
+        self.assertFalse(config["ECTransformer"]["use_lqe"])
+        self.assertFalse(config["ECTransformer"]["use_pre_outputs"])
+        self.assertEqual(config["ECTransformer"]["num_denoising"], 100)
+        self.assertEqual(config["ECCriterion"]["losses"], ["mal", "boxes"])
+        self.assertFalse(config["ECCriterion"]["use_uni_set"])
+        self.assertFalse(config["ECCriterion"]["use_fgl"])
+        self.assertFalse(config["ECCriterion"]["use_ddf"])
+
+    def test_csg_continuous_go_differs_from_no_dfine_only_by_go(self):
+        no_dfine = _resolved_config(
+            "ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_no_dfine.yml"
+        )
+        continuous_go = _resolved_config(
+            "ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_continuous_go.yml"
+        )
+
+        comparable_no_dfine = deepcopy(no_dfine)
+        comparable_continuous_go = deepcopy(continuous_go)
+        comparable_no_dfine.pop("__include__", None)
+        comparable_continuous_go.pop("__include__", None)
+        comparable_no_dfine["ECCriterion"]["use_uni_set"] = True
+        comparable_no_dfine["output_dir"] = comparable_continuous_go["output_dir"]
+        self.assertEqual(comparable_continuous_go, comparable_no_dfine)
+
+    def test_csg_mosaic_focal_replaces_mal_without_disabling_mosaic(self):
+        config = _resolved_config(
+            "ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_mosaic_focal.yml"
+        )
+
+        criterion = config["ECCriterion"]
+        self.assertEqual(criterion["losses"], ["focal", "boxes", "local"])
+        self.assertEqual(criterion["weight_dict"]["loss_focal"], 1)
+        self.assertEqual(criterion["alpha"], 0.25)
+        self.assertEqual(criterion["gamma"], 2.0)
+        self.assertEqual(
+            config["train_dataloader"]["dataset"]["transforms"]["mosaic_prob"],
+            1.0,
+        )
+
+    def test_csg_no_mosaic_focal_only_disables_mosaic_from_focal_control(self):
+        mosaic_focal = _resolved_config(
+            "ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_mosaic_focal.yml"
+        )
+        no_mosaic_focal = _resolved_config(
+            "ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_no_mosaic_focal.yml"
+        )
+
+        comparable_mosaic_focal = deepcopy(mosaic_focal)
+        comparable_no_mosaic_focal = deepcopy(no_mosaic_focal)
+        comparable_mosaic_focal.pop("__include__", None)
+        comparable_no_mosaic_focal.pop("__include__", None)
+        comparable_mosaic_focal["train_dataloader"]["dataset"]["transforms"][
+            "mosaic_prob"
+        ] = 0.0
+        comparable_mosaic_focal["output_dir"] = comparable_no_mosaic_focal[
+            "output_dir"
+        ]
+        self.assertEqual(comparable_no_mosaic_focal, comparable_mosaic_focal)
+
+    def test_csg_no_dfine_no_cdn_only_disables_cdn_from_no_dfine(self):
+        no_dfine = _resolved_config(
+            "ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_no_dfine.yml"
+        )
+        combined = _resolved_config(
+            "ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_no_dfine_no_cdn.yml"
+        )
+
+        comparable_no_dfine = deepcopy(no_dfine)
+        comparable_combined = deepcopy(combined)
+        comparable_no_dfine.pop("__include__", None)
+        comparable_combined.pop("__include__", None)
+        comparable_no_dfine["ECTransformer"]["num_denoising"] = 0
+        comparable_no_dfine["output_dir"] = comparable_combined["output_dir"]
+        self.assertEqual(comparable_combined, comparable_no_dfine)
+
+    def test_csg_dec5_no_dfine_keeps_depth_and_removes_dfine(self):
+        config = _resolved_config(
+            "ecdet_l_dinov2s_patch16_dec5_kidney_v2_260729_csg200m_no_dfine.yml"
+        )
+
+        self.assertEqual(config["ECTransformer"]["num_layers"], 5)
+        self.assertEqual(config["ECTransformer"]["num_denoising"], 100)
+        self.assertFalse(config["ECTransformer"]["use_fdr_decode"])
+        self.assertFalse(config["ECTransformer"]["use_aux_distribution"])
+        self.assertFalse(config["ECTransformer"]["use_lqe"])
+        self.assertFalse(config["ECTransformer"]["use_pre_outputs"])
+        self.assertEqual(config["ECCriterion"]["losses"], ["mal", "boxes"])
+        self.assertFalse(config["ECCriterion"]["use_uni_set"])
+        self.assertFalse(config["ECCriterion"]["use_fgl"])
+        self.assertFalse(config["ECCriterion"]["use_ddf"])
+
+    def test_csg_ablation_2_launcher_maps_all_eight_experiments(self):
+        launcher = REPO_ROOT / "slurm" / "ecdet_csgv2_ablations_2gpu_150e.sbatch"
+        expected = {
+            0: ("no-cdn", "csg200m_no_cdn.yml"),
+            1: ("no-go-lsd", "csg200m_no_go_lsd.yml"),
+            2: ("no-dfine", "csg200m_no_dfine.yml"),
+            3: ("continuous-go", "csg200m_continuous_go.yml"),
+            4: ("mosaic-focal", "csg200m_mosaic_focal.yml"),
+            5: ("no-mosaic-focal", "csg200m_no_mosaic_focal.yml"),
+            6: ("no-dfine-no-cdn", "csg200m_no_dfine_no_cdn.yml"),
+            7: ("dec5-no-dfine", "dec5_kidney_v2_260729_csg200m_no_dfine.yml"),
+        }
+
+        for task_id, fragments in expected.items():
+            env = os.environ.copy()
+            env.update(
+                {
+                    "DRY_RUN": "1",
+                    "SLURM_ARRAY_TASK_ID": str(task_id),
+                    "SLURM_ARRAY_JOB_ID": "dry-run",
+                    "SLURM_JOB_NODELIST": "local",
+                    "SLURM_JOB_PARTITION": "local",
+                }
+            )
+            result = subprocess.run(
+                ["bash", str(launcher)],
+                cwd=REPO_ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for fragment in fragments:
+                self.assertIn(fragment, result.stdout)
+            self.assertIn("Global batch size: 32 (2 GPUs x 16 samples/GPU)", result.stdout)
+            self.assertIn("Epochs/patience/seed: 150/30/42", result.stdout)
+
     def test_normal_dec4_changes_only_decoder_depth_and_output_directory(self):
         dec3 = _resolved_config(
             "ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729.yml"

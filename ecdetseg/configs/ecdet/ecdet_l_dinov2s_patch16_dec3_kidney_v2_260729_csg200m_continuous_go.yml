@@ -1,0 +1,9 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_no_dfine.yml',
+]
+
+# Continuous-box diagnostic: strict no-D-FINE with GO union matching restored.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_continuous_go
+
+ECCriterion:
+  use_uni_set: true

@@ -1,18 +1,17 @@
 # EC Mid-Hospital Kidney Ablations
 
-## 文档状态
+## 结果口径
 
-- 当前所有已完成实验统一归为基线，不计入消融结论。
-- 基线结果从各实验 `log.txt` 中按验证集最高 `mAP50-95` 选择 epoch，并从同一 epoch 读取全部指标。
-- 指标统一使用 `[0, 1]` 小数表示。
-- 四组基线已使用各自的 `best.pth` 完成统一重评，补齐 `F1@IoU=0.95` 和 `F1@IoU=0.50:0.95 mean`。
-- 新增 F1 指标来自 debug01 重评任务 `113924`；既有 `F1@IoU=0.50`、`mAP50` 和 `mAP50-95` 保留原训练日志中最佳 epoch 的精确值。
+- 本文所有 F1 均使用 WZW-aligned 算法重新计算，不再使用历史日志中的 legacy macro-PR F1。
+- 每个实验均加载其已有的 `best.pth` 做 test-only 重评；没有重新训练模型。
+- 这些历史 `best.pth` 在训练时按当时的 `mAP50-95` 逻辑选出。当前代码已改为按 `mAP50` 选择 `best.pth`，但本文没有据此重训或重选历史 checkpoint。
+- 所有数值来自同一次重评保存的 COCO `precision/scores`，以 `[0, 1]` 小数表示。
+- 参数量来自各实验训练日志中的 trainable parameter count，表中换算为百万参数（M）。
 
 ## 公共实验设置
 
 | 项目 | 设置 |
 | --- | --- |
-| 任务 | 肾脏 6 类目标检测 |
 | 标注版本 | `v2_260729` |
 | 输入尺寸 | `640 x 640` |
 | Backbone | DINOv2-S，原始 patch14 权重适配到 patch16 |
@@ -22,64 +21,42 @@
 | 最大 epoch | 150 |
 | Early-stop patience | 30 |
 | Seed | 42 |
-| 最佳 epoch 选择 | 验证集 `mAP50-95` 最大值 |
+| 历史 checkpoint 选择 | 验证集 `mAP50-95` 最大值 |
+| 本次操作 | 加载历史 `best.pth`，使用当前评估代码 test-only 重评 |
+
+验证集标注包含 6 个检测类别，重评时 evaluator `catIds=[0,1,2,3,4,5]`。
 
 ## Section 1：基线测试
 
 ### Subsection 1：Mid-Hospital Kidney v2_260729（原始图像）
-
-#### 数据集
 
 | Split | 图像数 | 标注框数 | 图像目录 | 标注文件 |
 | --- | ---: | ---: | --- | --- |
 | Train | 4,997 | 3,976 | `/opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/images` | `annotations/v2_260729/train.json` |
 | Val | 1,198 | 948 | `/opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/images` | `annotations/v2_260729/val.json` |
 
-Train 和 Val 共用以下 6 个类别：
-
-1. `shen cuo gou liu`
-2. `shen ji shui`
-3. `shen jie shi`
-4. `shen nang zhong`
-5. `shen shi zhi mi man xing bing bian`
-6. `shen zang e xing zhong liu`
-
-#### 基线结果
-
-| Baseline | Decoder 层数 | 最佳 epoch | F1@IoU=0.50 | F1@IoU=0.95 | F1@IoU=0.50:0.95 mean | mAP50 | mAP50-95 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| DINOv2-S patch16 dec3 | 3 | 77 | 0.651756 | 0.005875 | 0.378952 | 0.679602 | 0.352387 |
-| DINOv2-S patch16 dec4 | 4 | 待完成 | 待填 | 待填 | 待填 | 待填 | 待填 |
-| DINOv2-S patch16 dec5 | 5 | 47 | 0.669732 | 0.017554 | 0.398467 | 0.713884 | 0.373374 |
+| Method | Params (M) | F1@IoU=0.50 | F1@IoU=0.95 | F1@IoU=0.50:0.95 mean | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| EC, 3-layer decoder | 31.363 | 0.688261 | 0.006949 | 0.412495 | 0.679579 | 0.352346 |
+| EC, 5-layer decoder | 33.947 | **0.732372** | **0.016403** | **0.440840** | **0.713856** | **0.373373** |
 
 ### Subsection 2：CSGv2
 
-#### 数据集
-
-CSGv2 对应当前配置中的 `images_CSG_200m`。它与原始图像基线使用完全相同的 `v2_260729` Train/Val 标注、类别和数据划分，只替换图像目录。
+CSGv2 对应配置中的 `images_CSG_200m`。它与原始图像实验使用相同的 `v2_260729` Train/Val 标注、类别和划分，仅替换图像目录。
 
 | Split | 图像数 | 标注框数 | 图像目录 | 标注文件 |
 | --- | ---: | ---: | --- | --- |
 | Train | 4,997 | 3,976 | `/opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/images_CSG_200m` | `annotations/v2_260729/train.json` |
 | Val | 1,198 | 948 | `/opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/images_CSG_200m` | `annotations/v2_260729/val.json` |
 
-#### 基线结果
-
-| Baseline | Decoder 层数 | 最佳 epoch | F1@IoU=0.50 | F1@IoU=0.95 | F1@IoU=0.50:0.95 mean | mAP50 | mAP50-95 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| DINOv2-S patch16 dec3 | 3 | 37 | 0.693674 | 0.008231 | **0.413271** | 0.748159 | **0.393221** |
-| DINOv2-S patch16 dec4 | 4 | 待完成 | 待填 | 待填 | 待填 | 待填 | 待填 |
-| DINOv2-S patch16 dec5 | 5 | 39 | 0.689514 | 0.008508 | 0.411576 | 0.736274 | 0.385325 |
-
-当前四组基线中，最高 `mAP50-95` 为 CSGv2 dec3 的 `0.393221`。
+| Method | Params (M) | F1@IoU=0.50 | F1@IoU=0.95 | F1@IoU=0.50:0.95 mean | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| EC, 3-layer decoder | 31.363 | 0.737563 | 0.009950 | 0.447607 | **0.748113** | **0.393204** |
+| EC, 5-layer decoder | 33.947 | **0.745585** | **0.010362** | **0.453677** | 0.736385 | 0.385437 |
 
 #### 推理速度
 
-CSGv2 dec3 和 dec5 的最佳 checkpoint 均已完成正式测速。这里统计的是预生成输入 Tensor 已经位于 GPU 后，`cfg.model.deploy()(images)` 的 model-only 前向速度，包含 Backbone、HybridEncoder 和 ECTransformer decoder。
-
-不包含图片读取、resize/normalize、CPU 到 GPU 传输、PostProcessor、阈值过滤、结果回传和绘图。
-
-测速条件：
+速度统计对象是预生成输入 Tensor 已位于 GPU 后的 `cfg.model.deploy()(images)` model-only 前向，包含 Backbone、HybridEncoder 和 ECTransformer decoder；不包含图片读取、resize/normalize、CPU 到 GPU 传输、PostProcessor、阈值过滤、结果回传和绘图。
 
 | 项目 | 设置 |
 | --- | --- |
@@ -94,80 +71,96 @@ CSGv2 dec3 和 dec5 的最佳 checkpoint 均已完成正式测速。这里统计
 | FP32 | TF32 disabled，IEEE FP32 |
 | FP16/AMP | FP32 权重 + CUDA autocast FP16 |
 
-| Baseline | 指标 | FP32 | FP16/AMP |
+| Method | 指标 | FP32 | FP16/AMP |
 | --- | --- | ---: | ---: |
-| CSGv2 DINOv2-S patch16 dec3 | Mean latency (ms) | 11.139 | 11.317 |
-| CSGv2 DINOv2-S patch16 dec3 | Throughput (images/s) | 89.77 | 88.36 |
-| CSGv2 DINOv2-S patch16 dec5 | Mean latency (ms) | 13.942 | 15.906 |
-| CSGv2 DINOv2-S patch16 dec5 | Throughput (images/s) | 71.72 | 62.87 |
+| CSGv2 EC, 3-layer decoder | Mean latency (ms) | 11.139 | 11.317 |
+| CSGv2 EC, 3-layer decoder | Throughput (images/s) | 89.77 | 88.36 |
+| CSGv2 EC, 5-layer decoder | Mean latency (ms) | 13.942 | 15.906 |
+| CSGv2 EC, 5-layer decoder | Throughput (images/s) | 71.72 | 62.87 |
 
-重评与测速记录：
+## Section 2：CSGv2 消融结果
 
-| 任务 | 数组项 | 实验 | 结果日志 |
-| --- | ---: | --- | --- |
-| `113924` | 0 | 原始图像 dec3 重评 | `/opt/wanrui/EdgeCrafter/outputs/reeval/kidney_extended_f1/normal-dec3/metrics-113924_0.log` |
-| `113924` | 1 | 原始图像 dec5 重评 | `/opt/wanrui/EdgeCrafter/outputs/reeval/kidney_extended_f1/normal-dec5/metrics-113924_1.log` |
-| `113924` | 2 | CSGv2 dec3 重评 | `/opt/wanrui/EdgeCrafter/outputs/reeval/kidney_extended_f1/csgv2-dec3/metrics-113924_2.log` |
-| `113924` | 3 | CSGv2 dec5 重评 | `/opt/wanrui/EdgeCrafter/outputs/reeval/kidney_extended_f1/csgv2-dec5/metrics-113924_3.log` |
-| `113925` | 0 | CSGv2 dec3 model-only 测速 | `/opt/wanrui/EdgeCrafter/outputs/benchmark/kidney_csgv2_model_only/csgv2-dec3/benchmark-113925_0.log` |
-| `113925` | 1 | CSGv2 dec5 model-only 测速 | `/opt/wanrui/EdgeCrafter/outputs/benchmark/kidney_csgv2_model_only/csgv2-dec5/benchmark-113925_1.log` |
+下面按消融目的组织结果。为使每组能直接比较，同一个对照实验会在不同组中重复出现。
 
-## Section 2：消融结果
+### Group 1：CDN
 
-### 消融实验登记
-
-以下实验不属于当前基线。只有完成训练并按相同验证口径评估后，才能填写结果和形成消融结论。
-
-| ID | 实验 | 相对基线的变化 | 初始化 | FeatAug | 状态 |
-| --- | --- | --- | --- | --- | --- |
-| A1 | DINOv2-S patch16 dec4（原始图像、CSGv2） | Decoder 从 3/5 层补充为 4 层 | DINOv2-S pretrained | 无 | 待运行 |
-| A2 | ECDet-X COCO-decoder CSGv2 | 模型切换为 ECDet-X | `EC-1+2+coco-decoder.pth` | checkpoint 无该分类头 | 待完成 |
-| A3 | ECDet-X organ-decoder CSGv2 | 模型切换为 ECDet-X，使用 organ decoder 初始化 | `EC-1+2+organ-decoder.pth` | 必须启用并加载 crop 分类头 | 等待 FeatAug runtime 实现 |
-
-### 消融指标
-
-| ID | 最佳 epoch | F1@IoU=0.50 | F1@IoU=0.95 | F1@IoU=0.50:0.95 mean | mAP50 | mAP50-95 |
+| Method | Params (M) | F1@IoU=0.50 | F1@IoU=0.95 | F1@IoU=0.50:0.95 mean | mAP50 | mAP50-95 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| A1 | 待填 | 待填 | 待填 | 待填 | 待填 | 待填 |
-| A2 | 待填 | 待填 | 待填 | 待填 | 待填 | 待填 |
-| A3 | 待填 | 待填 | 待填 | 待填 | 待填 | 待填 |
+| EC | 31.363 | **0.737563** | 0.009950 | **0.447607** | **0.748113** | **0.393204** |
+| EC - CDN | 31.361 | 0.736851 | **0.032633** | 0.434049 | 0.747688 | 0.381112 |
 
-### 相对基线变化
+### Group 2：D-FINE 主链
 
-消融实验默认与 CSGv2 DINOv2-S patch16 dec3 基线比较。报告绝对值的同时记录差值：
+| Method | Params (M) | F1@IoU=0.50 | F1@IoU=0.95 | F1@IoU=0.50:0.95 mean | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| EC | 31.363 | 0.737563 | 0.009950 | 0.447607 | 0.748113 | **0.393204** |
+| EC - GO-LSD | 31.363 | 0.725506 | **0.023908** | 0.441692 | 0.727683 | 0.383905 |
+| EC - D-FINE | 31.130 | **0.744597** | 0.023011 | 0.448775 | **0.749416** | 0.392016 |
+| Continuous + GO | 31.130 | 0.739551 | 0.019069 | **0.450116** | 0.743755 | 0.389731 |
 
-| ID | ΔF1@0.50 | ΔF1@0.95 | ΔF1 mean | ΔmAP50 | ΔmAP50-95 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| A1 | 待填 | 待填 | 待填 | 待填 | 待填 |
-| A2 | 待填 | 待填 | 待填 | 待填 | 待填 |
-| A3 | 待填 | 待填 | 待填 | 待填 | 待填 |
+### Group 3：D-FINE × CDN 组合消融
+
+| Method | Params (M) | F1@IoU=0.50 | F1@IoU=0.95 | F1@IoU=0.50:0.95 mean | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| EC | 31.363 | 0.737563 | 0.009950 | 0.447607 | 0.748113 | **0.393204** |
+| EC - CDN | 31.361 | 0.736851 | **0.032633** | 0.434049 | 0.747688 | 0.381112 |
+| EC - D-FINE | 31.130 | **0.744597** | 0.023011 | **0.448775** | **0.749416** | 0.392016 |
+| EC - D-FINE - CDN | 31.128 | 0.701758 | 0.015417 | 0.423236 | 0.707381 | 0.367991 |
+
+### Group 4：Mosaic × 分类损失
+
+| Method | Params (M) | F1@IoU=0.50 | F1@IoU=0.95 | F1@IoU=0.50:0.95 mean | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Mosaic + MAL（EC） | 31.363 | 0.737563 | 0.009950 | 0.447607 | **0.748113** | **0.393204** |
+| Mosaic + Focal | 31.363 | **0.746001** | **0.024640** | **0.450944** | 0.737256 | 0.377110 |
+| No Mosaic + Focal | 31.363 | 0.726055 | 0.019412 | 0.439303 | 0.733912 | 0.376598 |
+
+### Group 5：Decoder depth × D-FINE
+
+| Method | Params (M) | F1@IoU=0.50 | F1@IoU=0.95 | F1@IoU=0.50:0.95 mean | mAP50 | mAP50-95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| EC, 3-layer decoder | 31.363 | 0.737563 | 0.009950 | 0.447607 | 0.748113 | **0.393204** |
+| EC - D-FINE, 3-layer decoder | 31.130 | 0.744597 | **0.023011** | 0.448775 | **0.749416** | 0.392016 |
+| EC, 5-layer decoder | 33.947 | **0.745585** | 0.010362 | **0.453677** | 0.736385 | 0.385437 |
+| EC - D-FINE, 5-layer decoder | 33.649 | 0.737065 | 0.014291 | 0.452148 | 0.739542 | 0.387785 |
+
+### 当前最优单项
+
+在全部已完成的 CSGv2 实验中，各列最高值不来自同一个方法：
+
+| 指标 | Method | 数值 |
+| --- | --- | ---: |
+| F1@IoU=0.50 | Mosaic + Focal | 0.746001 |
+| F1@IoU=0.95 | EC - CDN | 0.032633 |
+| F1@IoU=0.50:0.95 mean | EC, 5-layer decoder | 0.453677 |
+| mAP50 | EC - D-FINE | 0.749416 |
+| mAP50-95 | EC, 3-layer decoder | 0.393204 |
 
 ## 指标定义
 
-### F1@IoU=0.50
+### WZW-aligned F1
 
-沿用当前 `bbox-macro-F1@IoU50(PR-curve)` 实现：在 COCO IoU=0.50 的 precision-recall tensor 上，对有效类别的 precision 做 macro average，然后在 COCO recall grid 上计算 F1，报告最大 F1。
+对每个 IoU threshold 和每个类别，分别在 COCO recall grid 上寻找该类别 F1 最大的 PR 点。不同类别可以选择不同的 recall、precision 和 confidence。
 
-### F1@IoU=0.95
-
-使用与 `F1@IoU=0.50` 完全相同的 macro PR-curve 计算方法，但选择 COCO IoU=0.95 的 precision 切片，并在 recall grid 上报告最大 F1。
-
-### F1@IoU=0.50:0.95 mean
-
-分别计算以下 10 个 IoU threshold 的 macro PR-curve 最大 F1：
+类别汇总时只保留 `class_best_f1 > 0` 的类别，然后计算：
 
 ```text
-0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95
+mean_P = mean(class_best_precision)
+mean_R = mean(class_best_recall)
+overall_F1 = 2 * mean_P * mean_R / (mean_P + mean_R)
 ```
 
-然后取算术平均：
+因此，整体 F1 不是 `mean(class_best_f1)`。`class_best_f1 > 0` 的过滤规则与目标算法一致，但可能排除完全失败的类别，使总体 F1 偏乐观。本次各实验在 IoU=0.50 时 6 个类别均有效；更高 IoU 下仍按该规则逐 threshold 过滤。
 
-```text
-F1 mean = mean(F1@0.50, F1@0.55, ..., F1@0.95)
-```
+- `F1@IoU=0.50`：IoU=0.50 时的 `overall_F1`。
+- `F1@IoU=0.95`：IoU=0.95 时的 `overall_F1`。
+- `F1@IoU=0.50:0.95 mean`：IoU 0.50、0.55、...、0.95 共 10 个 `overall_F1` 的算术平均。
+- `mAP50` 和 `mAP50-95`：同一份 COCO precision tensor 上按标准 COCO 类别均值计算，不沿用 F1 的 `class_best_f1 > 0` 过滤。
 
-该指标不是 `mAP50-95`，也不能由 `mAP50-95` 换算得到。
+历史字段 `coco_eval_bbox_f1` 仍保留 legacy macro-PR 语义，但本文不使用该字段填表。
 
-## 待办
+## 重评记录
 
-1. 消融实验完成后，按最高 `mAP50-95` epoch 回填所有同 epoch 指标和相对基线差值。
+统一重评输出目录：`outputs/reeval/kidney_wzw/`。每个方法目录包含 `metrics.log` 和 `eval.pth`；表中精确结果由 `eval.pth` 的 COCO `precision/scores` 计算，日志用于确认 checkpoint 加载和运行完整性。
+
+以下尚未完成，因此没有混入结果表：原始图像/CSGv2 的 4-layer decoder、ECDet-X COCO-decoder CSGv2、ECDet-X organ-decoder CSGv2。

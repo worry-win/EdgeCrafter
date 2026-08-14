@@ -1,0 +1,9 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m.yml',
+]
+
+# CDN-off control: remove denoising queries and losses only.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_no_cdn
+
+ECTransformer:
+  num_denoising: 0

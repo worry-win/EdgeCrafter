@@ -1,0 +1,18 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m.yml',
+]
+
+# Strict no-D-FINE control. Keep EC attention, MAL, CDN, L1 and GIoU.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec3_kidney_v2_260729_csg200m_no_dfine
+
+ECTransformer:
+  use_fdr_decode: false
+  use_aux_distribution: false
+  use_lqe: false
+  use_pre_outputs: false
+
+ECCriterion:
+  losses: ['mal', 'boxes']
+  use_uni_set: false
+  use_fgl: false
+  use_ddf: false
