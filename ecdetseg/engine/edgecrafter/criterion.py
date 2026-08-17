@@ -49,6 +49,8 @@ class ECCriterion(nn.Module):
         mask_point_sample_ratio=None,
         use_fgl=True,
         use_ddf=True,
+        ignore_iou_threshold=0.5,
+        ignore_iof_threshold=0.7,
         ):
         super().__init__()
         self.num_classes = num_classes
@@ -68,6 +70,50 @@ class ECCriterion(nn.Module):
         self.use_fgl = use_fgl
         self.use_ddf = use_ddf
         self.mask_point_sample_ratio = matcher.mask_point_sample_ratio
+        self.ignore_iou_threshold = float(ignore_iou_threshold)
+        self.ignore_iof_threshold = float(ignore_iof_threshold)
+
+    def _ignore_query_mask(self, outputs, targets, indices):
+        """Return unmatched queries that overlap class-agnostic ignore boxes."""
+        pred_boxes = outputs['pred_boxes']
+        ignored = torch.zeros(pred_boxes.shape[:2], dtype=torch.bool, device=pred_boxes.device)
+        for batch_idx, target in enumerate(targets):
+            ignore_boxes = target.get('ignore_boxes')
+            if ignore_boxes is None or ignore_boxes.numel() == 0:
+                continue
+            pred_boxes_xyxy = box_cxcywh_to_xyxy(pred_boxes[batch_idx])
+            ignore_boxes_xyxy = box_cxcywh_to_xyxy(ignore_boxes)
+            ious, _ = box_iou(pred_boxes_xyxy, ignore_boxes_xyxy)
+
+            intersection_top_left = torch.maximum(
+                pred_boxes_xyxy[:, None, :2], ignore_boxes_xyxy[None, :, :2]
+            )
+            intersection_bottom_right = torch.minimum(
+                pred_boxes_xyxy[:, None, 2:], ignore_boxes_xyxy[None, :, 2:]
+            )
+            intersection = (intersection_bottom_right - intersection_top_left).clamp(min=0).prod(dim=-1)
+            pred_area = (pred_boxes_xyxy[:, 2:] - pred_boxes_xyxy[:, :2]).clamp(min=0).prod(dim=-1)
+            iofs = intersection / pred_area[:, None].clamp(min=1e-6)
+
+            ignored[batch_idx] = (
+                (ious.max(dim=1).values >= self.ignore_iou_threshold)
+                | (iofs.max(dim=1).values >= self.ignore_iof_threshold)
+            )
+            ignored[batch_idx, indices[batch_idx][0]] = False
+        return ignored
+
+    @staticmethod
+    def _reduce_classification_loss(loss, ignored_queries, num_boxes):
+        # Preserve the original loss scale when no query is ignored while
+        # removing all classification gradients from neutral queries.
+        per_query_loss = loss.sum(-1)
+        valid_queries = (~ignored_queries).to(loss.dtype)
+        per_image_loss = (
+            (per_query_loss * valid_queries).sum(1)
+            / valid_queries.sum(1).clamp(min=1)
+            * loss.shape[1]
+        )
+        return per_image_loss.sum() / num_boxes
 
     def loss_labels_focal(self, outputs, targets, indices, num_boxes):
         assert 'pred_logits' in outputs
@@ -79,7 +125,9 @@ class ECCriterion(nn.Module):
         target_classes[idx] = target_classes_o
         target = F.one_hot(target_classes, num_classes=self.num_classes+1)[..., :-1].to(src_logits.dtype)
         loss = torchvision.ops.sigmoid_focal_loss(src_logits, target, self.alpha, self.gamma, reduction='none')
-        loss = loss.mean(1).sum() * src_logits.shape[1] / num_boxes
+        loss = self._reduce_classification_loss(
+            loss, self._ignore_query_mask(outputs, targets, indices), num_boxes
+        )
 
         return {'loss_focal': loss}
 
@@ -109,7 +157,9 @@ class ECCriterion(nn.Module):
         weight = self.alpha * pred_score.pow(self.gamma) * (1 - target) + target_score
 
         loss = F.binary_cross_entropy_with_logits(src_logits, target_score, weight=weight, reduction='none')
-        loss = loss.mean(1).sum() * src_logits.shape[1] / num_boxes
+        loss = self._reduce_classification_loss(
+            loss, self._ignore_query_mask(outputs, targets, indices), num_boxes
+        )
         return {'loss_vfl': loss}
 
     def loss_labels_mal(self, outputs, targets, indices, num_boxes, values=None):
@@ -142,7 +192,9 @@ class ECCriterion(nn.Module):
             weight = pred_score.pow(self.gamma) * (1 - target) + target
 
         loss = F.binary_cross_entropy_with_logits(src_logits, target_score, weight=weight, reduction='none')
-        loss = loss.mean(1).sum() * src_logits.shape[1] / num_boxes
+        loss = self._reduce_classification_loss(
+            loss, self._ignore_query_mask(outputs, targets, indices), num_boxes
+        )
         return {'loss_mal': loss}
 
     def loss_boxes(self, outputs, targets, indices, num_boxes, boxes_weight=None):
@@ -259,6 +311,9 @@ class ECCriterion(nn.Module):
                     mask = torch.zeros_like(weight_targets_local, dtype=torch.bool)
                     mask[idx] = True
                     mask = mask.unsqueeze(-1).repeat(1, 1, 4).reshape(-1)
+                    neutral_mask = self._ignore_query_mask(outputs, targets, indices)
+                    neutral_mask = neutral_mask.unsqueeze(-1).repeat(1, 1, 4).reshape(-1)
+                    negative_mask = (~mask) & (~neutral_mask)
 
                     weight_targets_local[idx] = ious.reshape_as(weight_targets_local[idx]).to(weight_targets_local.dtype)
                     weight_targets_local = weight_targets_local.unsqueeze(-1).repeat(1, 1, 4).reshape(-1).detach()
@@ -267,10 +322,17 @@ class ECCriterion(nn.Module):
                     (F.log_softmax(pred_corners / T, dim=1), F.softmax(target_corners.detach() / T, dim=1))).sum(-1)
                     if 'is_dn' not in outputs:
                         batch_scale = 8 / outputs['pred_boxes'].shape[0]  # Avoid the influence of batch size per GPU
-                        self.num_pos, self.num_neg = (mask.sum() * batch_scale) ** 0.5, ((~mask).sum() * batch_scale) ** 0.5
+                        self.num_pos = (mask.sum() * batch_scale) ** 0.5
+                        self.num_neg = (negative_mask.sum() * batch_scale) ** 0.5
                     loss_match_local1 = loss_match_local[mask].mean() if mask.any() else 0
-                    loss_match_local2 = loss_match_local[~mask].mean() if (~mask).any() else 0
-                    losses['loss_ddf'] = (loss_match_local1 * self.num_pos + loss_match_local2 * self.num_neg) / (self.num_pos + self.num_neg)
+                    loss_match_local2 = loss_match_local[negative_mask].mean() if negative_mask.any() else 0
+                    normalizer = self.num_pos + self.num_neg
+                    if normalizer > 0:
+                        losses['loss_ddf'] = (
+                            loss_match_local1 * self.num_pos + loss_match_local2 * self.num_neg
+                        ) / normalizer
+                    else:
+                        losses['loss_ddf'] = pred_corners.sum() * 0
 
         return losses
 

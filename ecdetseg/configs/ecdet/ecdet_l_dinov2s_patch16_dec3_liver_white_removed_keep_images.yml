@@ -1,0 +1,26 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver.yml',
+]
+
+# Arm A: remove white-lesion boxes but retain their images. Those regions are
+# therefore treated as background during training (the intentional baseline).
+output_dir: outputs/ablation/ecdet_l_dinov2s_dec3_liver_white_removed_keep_images_bs32_2gpu_seed42
+num_classes: 7
+
+evaluator:
+  type: CocoEvaluator
+  iou_types: ['bbox']
+  verbose: True
+  ignore_as_crowd: True
+
+ECCriterion:
+  ignore_iou_threshold: 0.5
+  ignore_iof_threshold: 0.7
+
+train_dataloader:
+  dataset:
+    ann_file: /cobot/Data/Lesion_det/det_liver/annotations/train_ignore_9_12.json
+
+val_dataloader:
+  dataset:
+    ann_file: /cobot/Data/Lesion_det/det_liver/annotations/valid_white_ignore_remap.json

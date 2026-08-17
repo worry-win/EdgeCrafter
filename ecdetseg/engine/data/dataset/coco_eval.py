@@ -27,19 +27,45 @@ __all__ = ['CocoEvaluator',]
 
 @register()
 class CocoEvaluator(object):
-    def __init__(self, coco_gt, iou_types, verbose=True, ignore_category_ids=None):
+    def __init__(self, coco_gt, iou_types, verbose=True, ignore_category_ids=None, ignore_as_crowd=True):
         assert isinstance(iou_types, (list, tuple))
         coco_gt = copy.deepcopy(coco_gt)
-        self.ignore_category_ids = set(ignore_category_ids or [])
+        named_ignore_ids = {
+            category['id']
+            for category in coco_gt.dataset.get('categories', [])
+            if str(category.get('name', '')).strip().lower() == 'ignore'
+        }
+        self.ignore_category_ids = set(ignore_category_ids or []) | named_ignore_ids
         if self.ignore_category_ids:
-            coco_gt.dataset['categories'] = [
-                cat for cat in coco_gt.dataset.get('categories', [])
-                if cat['id'] not in self.ignore_category_ids
+            categories = coco_gt.dataset.get('categories', [])
+            normal_categories = [
+                category for category in categories
+                if category['id'] not in self.ignore_category_ids
             ]
-            coco_gt.dataset['annotations'] = [
-                ann for ann in coco_gt.dataset.get('annotations', [])
-                if ann.get('category_id') not in self.ignore_category_ids
+            annotations = coco_gt.dataset.get('annotations', [])
+            normal_annotations = [
+                annotation for annotation in annotations
+                if annotation.get('category_id') not in self.ignore_category_ids
             ]
+            if ignore_as_crowd:
+                ignore_annotations = [
+                    annotation for annotation in annotations
+                    if annotation.get('category_id') in self.ignore_category_ids
+                ]
+                next_annotation_id = max(
+                    (annotation.get('id', 0) for annotation in annotations), default=0
+                ) + 1
+                for annotation in ignore_annotations:
+                    for category in normal_categories:
+                        duplicate = dict(annotation)
+                        duplicate['id'] = next_annotation_id
+                        duplicate['category_id'] = category['id']
+                        duplicate['iscrowd'] = 1
+                        duplicate['ignore'] = 1
+                        normal_annotations.append(duplicate)
+                        next_annotation_id += 1
+            coco_gt.dataset['categories'] = normal_categories
+            coco_gt.dataset['annotations'] = normal_annotations
             coco_gt.createIndex()
         self.coco_gt : COCO = coco_gt
         self.allowed_category_ids = set(coco_gt.getCatIds())

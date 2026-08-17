@@ -85,6 +85,8 @@ class Mosaic(T.Transform):
 
             merged_image.paste(img, placement_offsets[i])
             target['boxes'] = target['boxes'] + offsets[i]
+            if 'ignore_boxes' in target:
+                target['ignore_boxes'] = target['ignore_boxes'] + offsets[i]
             
             if has_masks:
                 curr_m = target['masks'] 
@@ -140,6 +142,11 @@ class Mosaic(T.Transform):
         if 'boxes' in mosaic_target:
             mosaic_target['boxes'] = convert_to_tv_tensor(mosaic_target['boxes'], 'boxes', box_format='xyxy',
                                                           spatial_size=mosaic_image.size[::-1])
+        if 'ignore_boxes' in mosaic_target:
+            mosaic_target['ignore_boxes'] = convert_to_tv_tensor(
+                mosaic_target['ignore_boxes'], 'boxes', box_format='xyxy',
+                spatial_size=mosaic_image.size[::-1]
+            )
         if 'masks' in mosaic_target:
             mosaic_target['masks'] = convert_to_tv_tensor(mosaic_target['masks'], 'masks')
 

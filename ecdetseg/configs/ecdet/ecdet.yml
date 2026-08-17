@@ -80,6 +80,10 @@ ECCriterion:
   gamma: 1.5
   alpha: 0.75
   reg_max: 32
+  # Unmatched predictions are neutral when they sufficiently overlap a
+  # class-agnostic label named "ignore".
+  ignore_iou_threshold: 0.5
+  ignore_iof_threshold: 0.7
 
   matcher:
     type: HungarianMatcher

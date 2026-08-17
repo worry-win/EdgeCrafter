@@ -14,7 +14,7 @@ import torchvision.transforms.v2 as T
 import torchvision.transforms.v2.functional as F
 
 from ...core import register
-from .._misc import (BoundingBoxes, Image, Mask, SanitizeBoundingBoxes, Video,
+from .._misc import (BoundingBoxes, Image, Mask, SanitizeBoundingBoxes as TVSanitizeBoundingBoxes, Video,
                      _boxes_keys, convert_to_tv_tensor)
 
 torchvision.disable_beta_transforms_warning()
@@ -27,9 +27,58 @@ Resize = register()(T.Resize)
 # ToImageTensor = register()(T.ToImageTensor)
 # ConvertDtype = register()(T.ConvertDtype)
 # PILToTensor = register()(T.PILToTensor)
-SanitizeBoundingBoxes = register(name='SanitizeBoundingBoxes')(SanitizeBoundingBoxes)
 RandomCrop = register()(T.RandomCrop)
 Normalize = register()(T.Normalize)
+
+
+@register(name='SanitizeBoundingBoxes')
+class SanitizeBoundingBoxes(TVSanitizeBoundingBoxes):
+    def _ignore_keep(self, target):
+        if not isinstance(target, dict) or 'ignore_boxes' not in target:
+            return None
+        boxes = target['ignore_boxes']
+        if len(boxes) == 0:
+            return torch.zeros((0,), dtype=torch.bool, device=boxes.device)
+        boxes_tensor = boxes
+        box_format = getattr(boxes, _boxes_keys[0], None)
+        fmt = box_format.value.lower() if box_format is not None else 'xyxy'
+        if fmt != 'xyxy':
+            boxes_tensor = torchvision.ops.box_convert(boxes_tensor, in_fmt=fmt, out_fmt='xyxy')
+        min_size = getattr(self, 'min_size', 1.0)
+        keep = (boxes_tensor[:, 2] - boxes_tensor[:, 0] >= min_size) & \
+               (boxes_tensor[:, 3] - boxes_tensor[:, 1] >= min_size)
+        return keep & ~boxes_tensor.isnan().any(dim=1)
+
+    def forward(self, *inputs):
+        flat_inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs[0], tuple) else inputs
+        target_idx = next((i for i, value in enumerate(flat_inputs) if isinstance(value, dict)), None)
+        target = flat_inputs[target_idx] if target_idx is not None else None
+        ignore_keep = self._ignore_keep(target)
+        ignore_boxes = None
+        sanitized_inputs = inputs
+        if target is not None and 'ignore_boxes' in target:
+            ignore_boxes = target['ignore_boxes']
+            target_without_ignore = {
+                key: value for key, value in target.items() if key != 'ignore_boxes'
+            }
+            flat_inputs = list(flat_inputs)
+            flat_inputs[target_idx] = target_without_ignore
+            sanitized_inputs = (
+                (tuple(flat_inputs),)
+                if len(inputs) == 1 and isinstance(inputs[0], tuple)
+                else tuple(flat_inputs)
+            )
+
+        outputs = super().forward(*sanitized_inputs)
+        flat_outputs = outputs if isinstance(outputs, tuple) else (outputs,)
+        out_target = next((value for value in flat_outputs if isinstance(value, dict)), None)
+        if ignore_boxes is not None and out_target is not None:
+            if ignore_keep is None:
+                ignore_keep = torch.ones(
+                    (len(ignore_boxes),), dtype=torch.bool, device=ignore_boxes.device
+                )
+            out_target['ignore_boxes'] = ignore_boxes[ignore_keep]
+        return outputs
 
 
 @register()
@@ -81,11 +130,86 @@ class RandomIoUCrop(T.RandomIoUCrop):
         super().__init__(min_scale, max_scale, min_aspect_ratio, max_aspect_ratio, sampler_options, trials)
         self.p = p
 
+    def _resolve_params(self, image: Any, boxes: BoundingBoxes) -> Dict[str, Any]:
+        if hasattr(self, "make_params"):
+            return self.make_params([image, boxes])
+        return self._get_params([image, boxes])
+
+    @staticmethod
+    def _compute_within_crop_area(boxes: BoundingBoxes, params: Dict[str, Any]) -> torch.Tensor:
+        if len(params) < 1:
+            return torch.ones((len(boxes),), dtype=torch.bool, device=boxes.device)
+        if len(boxes) == 0:
+            return torch.zeros((0,), dtype=torch.bool, device=boxes.device)
+
+        xyxy_boxes = F.convert_bounding_box_format(
+            boxes.as_subclass(torch.Tensor),
+            boxes.format,
+            torchvision.tv_tensors.BoundingBoxFormat.XYXY,
+        )
+        cx = 0.5 * (xyxy_boxes[..., 0] + xyxy_boxes[..., 2])
+        cy = 0.5 * (xyxy_boxes[..., 1] + xyxy_boxes[..., 3])
+        left = params["left"]
+        right = left + params["width"]
+        top = params["top"]
+        bottom = top + params["height"]
+        return (left < cx) & (cx < right) & (top < cy) & (cy < bottom)
+
     def __call__(self, *inputs: Any) -> Any:
         if torch.rand(1) >= self.p:
             return inputs if len(inputs) > 1 else inputs[0]
 
-        return super().forward(*inputs)
+        flat_inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs[0], tuple) else inputs
+        if len(flat_inputs) != 2 or not isinstance(flat_inputs[1], dict) or "boxes" not in flat_inputs[1]:
+            return super().forward(*inputs)
+
+        image, target = flat_inputs
+        params = self._resolve_params(image, target["boxes"])
+        if len(params) < 1:
+            return inputs if len(inputs) > 1 else inputs[0]
+
+        out_target = dict(target)
+        out_image = F.crop(
+            image,
+            top=params["top"],
+            left=params["left"],
+            height=params["height"],
+            width=params["width"],
+        )
+        out_boxes = F.crop(
+            target["boxes"],
+            top=params["top"],
+            left=params["left"],
+            height=params["height"],
+            width=params["width"],
+        )
+        out_boxes[~params["is_within_crop_area"]] = 0
+        out_target["boxes"] = out_boxes
+
+        if "ignore_boxes" in target:
+            ignore_keep = self._compute_within_crop_area(target["ignore_boxes"], params)
+            ignore_boxes = F.crop(
+                target["ignore_boxes"],
+                top=params["top"],
+                left=params["left"],
+                height=params["height"],
+                width=params["width"],
+            )
+            if len(ignore_keep) > 0:
+                ignore_boxes[~ignore_keep] = 0
+            out_target["ignore_boxes"] = ignore_boxes
+
+        if "masks" in target:
+            out_target["masks"] = F.crop(
+                target["masks"],
+                top=params["top"],
+                left=params["left"],
+                height=params["height"],
+                width=params["width"],
+            )
+
+        outputs = (out_image, out_target)
+        return outputs if len(inputs) > 1 else outputs
 
 
 @register()

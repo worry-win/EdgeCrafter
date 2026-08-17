@@ -1,0 +1,28 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver.yml',
+]
+
+# Arm C: retain all images and target boxes; the category named "ignore" is
+# metadata-only and auto-detected independently of its numeric category ID.
+# It is excluded from the seven-class head, matching, CDN, localization, GO,
+# classification negatives and DDF background distillation.
+output_dir: outputs/ablation/ecdet_l_dinov2s_dec3_liver_white_neutral_ignore_bs32_2gpu_seed42
+num_classes: 7
+
+evaluator:
+  type: CocoEvaluator
+  iou_types: ['bbox']
+  verbose: True
+  ignore_as_crowd: True
+
+ECCriterion:
+  ignore_iou_threshold: 0.5
+  ignore_iof_threshold: 0.7
+
+train_dataloader:
+  dataset:
+    ann_file: /cobot/Data/Lesion_det/det_liver/annotations/train_white_ignore_remap.json
+
+val_dataloader:
+  dataset:
+    ann_file: /cobot/Data/Lesion_det/det_liver/annotations/valid_white_ignore_remap.json
