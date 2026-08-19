@@ -1,0 +1,53 @@
+__include__: [
+  'ecdet_x.yml',
+]
+
+# All-global LW xlarge encoder + official LW P3/P5 neck + fresh ECDet-X
+# decoder. The optimizer remains the strict ECDet-X recipe.
+output_dir: outputs/ablation/ecdet_x_lw_xlarge_liver_delete_image_allglobal_ec_lr
+num_classes: 7
+remap_mscoco_category: false
+
+ECDet:
+  backbone: LWDetrBackbone
+  encoder: IdentityEncoder
+  decoder: ECTransformer
+
+LWDetrBackbone:
+  weights_path: /cobot/Code/CODE/LW-DETR-main/pretrain_weights/LWDETR_xlarge_30e_objects365.pth
+  window_block_indexes: []
+
+ECTransformer:
+  feat_channels: [384, 384]
+  feat_strides: [8, 32]
+  num_levels: 2
+  num_points: [6, 6]
+
+train_dataloader:
+  total_batch_size: 32
+  num_workers: 8
+  dataset:
+    img_folder: /cobot/Data/Lesion_det/det_liver/img
+    ann_file: /cobot/Data/Lesion_det/det_liver/annotations/Lesion/Ignore_Delete-Image/train.json
+
+val_dataloader:
+  total_batch_size: 32
+  num_workers: 8
+  dataset:
+    img_folder: /cobot/Data/Lesion_det/det_liver/img
+    ann_file: /cobot/Data/Lesion_det/det_liver/annotations/Lesion/Ignore_Delete-Image/valid.json
+
+# ECDet-X learning-rate policy, matched to this backbone's public parameter
+# names (`backbone.encoder.*` and `backbone.projector.*`).
+optimizer:
+  params:
+    -
+      params: '^backbone\.(?!.*(?:norm|bn|bias)).*$'
+      lr: 0.0000025
+    -
+      params: '^backbone\.(?=.*(?:norm|bn|bias)).*$'
+      lr: 0.0000025
+      weight_decay: 0.0
+    -
+      params: '^(?!backbone\.)(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.0

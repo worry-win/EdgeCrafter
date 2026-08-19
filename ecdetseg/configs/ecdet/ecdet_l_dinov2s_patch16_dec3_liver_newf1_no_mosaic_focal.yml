@@ -1,0 +1,7 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_no_mosaic_no_mal_ignore9.yml',
+]
+
+# Fresh paired run for the aligned-F1 interaction matrix.
+# No Mosaic, Focal replaces MAL; D-FINE and CDN remain enabled.
+output_dir: outputs/ablation/newf1_ec_no_mosaic_focal_bs32_2gpu_seed42

@@ -1,0 +1,7 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_rf_neck_p4_points6_ignore9.yml',
+]
+
+# Fresh strict RF-neck P4/IdentityEncoder paired endpoint.
+# Decoder remains EC with six P4 sampling points; D-FINE and CDN stay enabled.
+output_dir: outputs/ablation/newf1_ec_rf_neck_p4_points6_bs32_2gpu_seed42

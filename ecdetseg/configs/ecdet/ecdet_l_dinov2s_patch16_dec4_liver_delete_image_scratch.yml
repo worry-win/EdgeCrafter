@@ -1,0 +1,23 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver.yml',
+]
+
+# Common control for the paired scratch-initialization augmentation study.
+output_dir: outputs/ablation/ecdet_l_dinov2s_dec4_liver_delete_image_scratch_bs32_2gpu_seed42
+num_classes: 7
+
+DinoV2Adapter:
+  skip_load_backbone: true
+
+# Restore the generic ECDet-L decoder contract overridden by the liver dec3 config.
+ECTransformer:
+  num_layers: 4
+  dim_feedforward: 2048
+
+train_dataloader:
+  dataset:
+    ann_file: /cobot/Data/Lesion_det/det_liver/annotations/Lesion/Ignore_Delete-Image/train.json
+
+val_dataloader:
+  dataset:
+    ann_file: /cobot/Data/Lesion_det/det_liver/annotations/Lesion/Ignore_Delete-Image/valid.json

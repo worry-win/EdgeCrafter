@@ -3,6 +3,7 @@ Copied from RT-DETR (https://github.com/lyuwenyu/RT-DETR)
 Copyright(c) 2023 lyuwenyu. All Rights Reserved.
 """
 
+import math
 from typing import Any, Dict, List, Optional
 
 import PIL
@@ -256,3 +257,118 @@ class ConvertPILImage(T.Transform):
         inpt = Image(inpt)
 
         return inpt
+
+
+@register()
+class GTExcludedBackgroundCorruption(T.Transform):
+    """Corrupt one sampled rectangle that is disjoint from all annotated boxes.
+
+    This transform expects the post-geometry image tensor in ``[0, 1]`` and
+    absolute bounding boxes. Both scored GT boxes and neutral ``ignore_boxes``
+    are protected, including an optional safety margin.
+    """
+
+    def __init__(
+        self,
+        mode: str,
+        p: float = 0.5,
+        area_range=(0.05, 0.15),
+        aspect_ratio_range=(0.5, 2.0),
+        box_margin: float = 4.0,
+        max_trials: int = 50,
+        noise_std: float = 0.15,
+    ) -> None:
+        super().__init__()
+        if mode not in ("noise", "mask"):
+            raise ValueError(f"mode must be 'noise' or 'mask', got {mode!r}")
+        if not 0.0 <= p <= 1.0:
+            raise ValueError(f"p must be in [0, 1], got {p}")
+        if not (0.0 < area_range[0] <= area_range[1] <= 1.0):
+            raise ValueError(f"invalid area_range={area_range!r}")
+        if not (0.0 < aspect_ratio_range[0] <= aspect_ratio_range[1]):
+            raise ValueError(f"invalid aspect_ratio_range={aspect_ratio_range!r}")
+        if box_margin < 0 or max_trials < 1 or noise_std < 0:
+            raise ValueError("box_margin/noise_std must be non-negative and max_trials positive")
+        self.mode = mode
+        self.p = float(p)
+        self.area_range = tuple(float(value) for value in area_range)
+        self.aspect_ratio_range = tuple(float(value) for value in aspect_ratio_range)
+        self.box_margin = float(box_margin)
+        self.max_trials = int(max_trials)
+        self.noise_std = float(noise_std)
+
+    @staticmethod
+    def _xyxy(boxes) -> torch.Tensor:
+        if boxes is None or len(boxes) == 0:
+            return torch.empty((0, 4), dtype=torch.float32)
+        tensor = boxes.as_subclass(torch.Tensor) if hasattr(boxes, "as_subclass") else torch.as_tensor(boxes)
+        box_format = getattr(boxes, "format", torchvision.tv_tensors.BoundingBoxFormat.XYXY)
+        return F.convert_bounding_box_format(
+            tensor,
+            box_format,
+            torchvision.tv_tensors.BoundingBoxFormat.XYXY,
+        ).detach().cpu().float()
+
+    def _protected_boxes(self, target: Dict[str, Any], height: int, width: int) -> torch.Tensor:
+        groups = [self._xyxy(target.get("boxes"))]
+        if "ignore_boxes" in target:
+            groups.append(self._xyxy(target.get("ignore_boxes")))
+        boxes = torch.cat(groups, dim=0)
+        if len(boxes) == 0:
+            return boxes
+        boxes[:, 0::2] = (boxes[:, 0::2] + torch.tensor([-self.box_margin, self.box_margin])).clamp(0, width)
+        boxes[:, 1::2] = (boxes[:, 1::2] + torch.tensor([-self.box_margin, self.box_margin])).clamp(0, height)
+        return boxes
+
+    def _sample_rectangle(self, height: int, width: int, protected: torch.Tensor):
+        image_area = height * width
+        log_ratio_min = math.log(self.aspect_ratio_range[0])
+        log_ratio_max = math.log(self.aspect_ratio_range[1])
+        for _ in range(self.max_trials):
+            area_fraction = torch.empty(1).uniform_(*self.area_range).item()
+            aspect_ratio = math.exp(torch.empty(1).uniform_(log_ratio_min, log_ratio_max).item())
+            rectangle_area = image_area * area_fraction
+            rectangle_width = max(1, round(math.sqrt(rectangle_area * aspect_ratio)))
+            rectangle_height = max(1, round(math.sqrt(rectangle_area / aspect_ratio)))
+            if rectangle_width > width or rectangle_height > height:
+                continue
+            left = int(torch.randint(0, width - rectangle_width + 1, (1,)).item())
+            top = int(torch.randint(0, height - rectangle_height + 1, (1,)).item())
+            right, bottom = left + rectangle_width, top + rectangle_height
+            if len(protected) > 0:
+                intersects = (
+                    (protected[:, 0] < right)
+                    & (protected[:, 2] > left)
+                    & (protected[:, 1] < bottom)
+                    & (protected[:, 3] > top)
+                )
+                if intersects.any():
+                    continue
+            return top, left, rectangle_height, rectangle_width
+        return None
+
+    def __call__(self, *inputs: Any) -> Any:
+        flat_inputs = inputs[0] if len(inputs) == 1 and isinstance(inputs[0], tuple) else inputs
+        if len(flat_inputs) != 2 or not isinstance(flat_inputs[1], dict):
+            raise TypeError("GTExcludedBackgroundCorruption expects an (image, target) pair")
+        image, target = flat_inputs
+        if torch.rand(1).item() >= self.p:
+            return image, target
+        if not isinstance(image, torch.Tensor) or image.ndim != 3:
+            raise TypeError("GTExcludedBackgroundCorruption expects a CHW tensor image")
+
+        _, height, width = image.shape
+        protected = self._protected_boxes(target, height, width)
+        rectangle = self._sample_rectangle(height, width, protected)
+        if rectangle is None:
+            return image, target
+
+        top, left, rectangle_height, rectangle_width = rectangle
+        output = image.as_subclass(torch.Tensor).clone()
+        patch = output[:, top:top + rectangle_height, left:left + rectangle_width]
+        if self.mode == "noise":
+            patch.copy_((patch + torch.randn_like(patch) * self.noise_std).clamp_(0.0, 1.0))
+        else:
+            channel_mean = output.mean(dim=(1, 2), keepdim=True)
+            patch.copy_(channel_mean)
+        return Image(output), target

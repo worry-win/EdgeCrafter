@@ -1,0 +1,21 @@
+__include__: [
+  'ecdet_x_liver_ignore9.yml',
+]
+
+# Official LW-DETR xlarge ViT-B encoder and P3/P5 MultiScaleProjector,
+# followed by a fresh ECDet-X decoder and the unchanged EC training recipe.
+output_dir: outputs/ecdet_x_lw_xlarge_encoder_neck_liver_ignore9
+
+ECDet:
+  backbone: LWDetrBackbone
+  encoder: IdentityEncoder
+  decoder: ECTransformer
+
+LWDetrBackbone:
+  weights_path: /cobot/Code/CODE/LW-DETR-main/pretrain_weights/LWDETR_xlarge_30e_objects365.pth
+
+ECTransformer:
+  feat_channels: [384, 384]
+  feat_strides: [8, 32]
+  num_levels: 2
+  num_points: [6, 6]

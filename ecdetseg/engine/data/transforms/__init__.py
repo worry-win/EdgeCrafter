@@ -5,6 +5,7 @@ Copyright(c) 2023 lyuwenyu. All Rights Reserved.
 
 
 from ._transforms import (ConvertBoxes, ConvertPILImage, EmptyTransform,
+                          GTExcludedBackgroundCorruption,
                           Normalize, PadToSize, RandomCrop,
                           RandomHorizontalFlip, RandomIoUCrop,
                           RandomPhotometricDistort, RandomZoomOut, Resize,

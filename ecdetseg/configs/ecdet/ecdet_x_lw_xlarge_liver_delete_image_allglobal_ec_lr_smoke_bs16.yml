@@ -1,0 +1,9 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_delete_image_allglobal_ec_lr.yml',
+]
+
+train_dataloader:
+  total_batch_size: 16
+
+val_dataloader:
+  total_batch_size: 16

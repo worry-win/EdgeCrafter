@@ -213,8 +213,11 @@ __marimo__/
 *.zip
 .DS_Store
 
-# Local experiment outputs and agent working notes
-outputs/
+# Cluster-local experiment assets and agent working notes
+/docs/
+/slurm/
+/outputs/
+/.local/
 ecdetseg/outputs/
 events.out.tfevents.*
 .planning/

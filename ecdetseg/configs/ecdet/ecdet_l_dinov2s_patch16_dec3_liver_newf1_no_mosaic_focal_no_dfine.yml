@@ -1,0 +1,19 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_newf1_no_mosaic_focal.yml',
+]
+
+# Add strict no-D-FINE to the paired No-Mosaic + Focal arm; keep CDN enabled.
+output_dir: outputs/ablation/newf1_ec_no_mosaic_focal_no_dfine_bs32_2gpu_seed42
+
+ECTransformer:
+  use_fdr_decode: false
+  use_aux_distribution: false
+  use_lqe: false
+  use_pre_outputs: false
+
+ECCriterion:
+  weight_dict: {loss_focal: 1, loss_bbox: 5, loss_giou: 2}
+  losses: ['focal', 'boxes']
+  use_uni_set: false
+  use_fgl: false
+  use_ddf: false

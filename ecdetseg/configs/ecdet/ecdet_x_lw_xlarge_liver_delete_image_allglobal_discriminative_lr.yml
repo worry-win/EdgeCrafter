@@ -1,0 +1,27 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_delete_image_allglobal_ec_lr.yml',
+]
+
+output_dir: outputs/ablation/ecdet_x_lw_xlarge_liver_delete_image_allglobal_discriminative_lr
+
+# Preserve the EC optimizer and schedule while separating the pretrained LW
+# encoder, pretrained LW projector, and randomly initialized EC decoder rates.
+optimizer:
+  params:
+    -
+      params: '^(?=.*backbone\.encoder)(?!.*(?:norm|bias|pos_embed|gamma_)).*$'
+      lr: 0.00001
+    -
+      params: '^(?=.*backbone\.encoder)(?=.*(?:norm|bias|pos_embed|gamma_)).*$'
+      lr: 0.00001
+      weight_decay: 0.0
+    -
+      params: '^(?=.*backbone\.projector)(?!.*(?:norm|bn|bias|stages\.[01]\.1\.weight)).*$'
+      lr: 0.00005
+    -
+      params: '^(?=.*backbone\.projector)(?=.*(?:norm|bn|bias|stages\.[01]\.1\.weight)).*$'
+      lr: 0.00005
+      weight_decay: 0.0
+    -
+      params: '^(?!backbone\.)(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.0

@@ -1,0 +1,9 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver_newf1_rf_neck_p4_points6_no_dfine.yml',
+]
+
+# Final RF-neck endpoint: additionally remove CDN denoising queries.
+output_dir: outputs/ablation/newf1_ec_rf_neck_p4_points6_no_dfine_no_cdn_bs32_2gpu_seed42
+
+ECTransformer:
+  num_denoising: 0

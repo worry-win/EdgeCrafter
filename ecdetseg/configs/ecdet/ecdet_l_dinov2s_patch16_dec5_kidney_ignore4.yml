@@ -1,0 +1,32 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec3_liver.yml',
+]
+
+# DINOv2-S no-register baseline for kidney lesions. Source category 4 is
+# removed; retained categories map to contiguous labels 0..3.
+output_dir: outputs/ablation/ecdet_l_dinov2s_patch16_dec5_kidney_ignore4
+num_classes: 4
+remap_mscoco_category: False
+
+train_dataloader:
+  total_batch_size: 32
+  dataset:
+    img_folder: /cobot/Data/Lesion_det/det_kidney/img
+    ann_file: /cobot/Data/Lesion_det/det_kidney/annotations/train_ignore_4_remap.json
+
+val_dataloader:
+  total_batch_size: 32
+  dataset:
+    img_folder: /cobot/Data/Lesion_det/det_kidney/img
+    ann_file: /cobot/Data/Lesion_det/det_kidney/annotations/valid_ignore_4_remap.json
+
+ECTransformer:
+  num_layers: 5
+  eval_idx: -1
+  num_levels: 3
+  num_points: [3, 6, 3]
+  cross_attn_method: default
+
+epochs: 150
+early_stop_patience: 30
+early_stop_min_delta: 0.0

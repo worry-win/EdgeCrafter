@@ -1,0 +1,29 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec4_liver_delete_image_scratch.yml',
+]
+
+output_dir: outputs/ablation/ecdet_l_dinov2s_dec4_liver_delete_image_scratch_bg_mask_bs32_2gpu_seed42
+
+train_dataloader:
+  dataset:
+    transforms:
+      ops:
+        - {type: Mosaic, output_size: 320, rotation_range: 10, translation_range: [0.1, 0.1], scaling_range: [0.5, 1.5],
+           fill_value: 0, max_cached_images: 50, random_pop: True}
+        - {type: RandomPhotometricDistort, p: 0.5}
+        - {type: RandomZoomOut, fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: RandomHorizontalFlip}
+        - {type: Resize, size: [640, 640]}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: ConvertPILImage, dtype: 'float32', scale: true}
+        - {type: GTExcludedBackgroundCorruption, mode: mask, p: 0.5, area_range: [0.05, 0.15],
+           aspect_ratio_range: [0.5, 2.0], box_margin: 4, max_trials: 50, noise_std: 0.15}
+        - {type: Normalize, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+        - {type: ConvertBoxes, fmt: cxcywh, normalize: true}
+      policy: stop_epoch
+      mosaic_epoch: 24
+      mosaic_prob: 1.0
+      stop_epoch: 148
+      remove_ops: [Mosaic, RandomPhotometricDistort, RandomZoomOut, RandomIoUCrop, GTExcludedBackgroundCorruption]
