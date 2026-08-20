@@ -1,5 +1,6 @@
 import unittest
 import re
+import copy
 from unittest import mock
 
 import torch
@@ -178,6 +179,25 @@ class LWDetrBackboneTest(unittest.TestCase):
                 }
                 self.assertEqual(projection_lrs, {projection_lr})
                 self.assertEqual(config["optimizer"]["lr"], 5e-4)
+
+    def test_hybrid01_points633_changes_only_deformable_attention_points(self):
+        config_root = "ecdetseg/configs/ecdet/"
+        baseline = load_config(
+            config_root + "ecdet_x_lw_xlarge_liver_delete_image_hybrid01.yml",
+            {},
+        )
+        experiment = load_config(
+            config_root + "ecdet_x_lw_xlarge_liver_delete_image_hybrid01_points633.yml",
+            {},
+        )
+
+        self.assertEqual(experiment["ECTransformer"]["num_points"], [6, 3, 3])
+        normalized = copy.deepcopy(experiment)
+        normalized.pop("__include__", None)
+        baseline.pop("__include__", None)
+        normalized["output_dir"] = baseline["output_dir"]
+        normalized["ECTransformer"]["num_points"] = baseline["ECTransformer"]["num_points"]
+        self.assertEqual(normalized, baseline)
 
 
 if __name__ == "__main__":
