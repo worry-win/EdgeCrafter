@@ -1,0 +1,26 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_delete_image_hybrid01.yml',
+]
+
+# Same as hybrid01; only the fresh EC projection learning rate is reduced 10x.
+output_dir: outputs/ablation/ecdet_x_lw_xlarge_liver_delete_image_hybrid02
+
+optimizer:
+  params:
+    -
+      params: '^(?=.*backbone\.encoder)(?!.*(?:norm|bias|pos_embed|gamma_)).*$'
+      lr: 0.00001
+    -
+      params: '^(?=.*backbone\.encoder)(?=.*(?:norm|bias|pos_embed|gamma_)).*$'
+      lr: 0.00001
+      weight_decay: 0.0
+    -
+      params: '^(?=.*backbone\.projector)(?!.*(?:norm|bn|bias)).*$'
+      lr: 0.00005
+    -
+      params: '^(?=.*backbone\.projector)(?=.*(?:norm|bn|bias)).*$'
+      lr: 0.00005
+      weight_decay: 0.0
+    -
+      params: '^(?!backbone\.)(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.0

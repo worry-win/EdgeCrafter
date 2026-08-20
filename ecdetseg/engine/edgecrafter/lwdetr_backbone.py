@@ -19,6 +19,7 @@ import torch.nn.functional as F
 from timm.models.layers import DropPath, Mlp, trunc_normal_
 
 from ..core import register
+from .hybrid_encoder import ConvNormLayer_fuse
 
 
 def _get_abs_pos(abs_pos: torch.Tensor, has_cls_token: bool, hw: tuple[int, int]) -> torch.Tensor:
@@ -102,7 +103,11 @@ class LWBlock(nn.Module):
 class LWViTEncoder(nn.Module):
     """Official LW-DETR xlarge ViT-B encoder topology."""
 
-    def __init__(self, window_block_indexes: tuple[int, ...]) -> None:
+    def __init__(
+        self,
+        window_block_indexes: tuple[int, ...],
+        out_feature_indexes: tuple[int, ...] = (2, 4, 5, 9),
+    ) -> None:
         super().__init__()
         depth = 10
         self.pretrain_use_cls_token = True
@@ -114,12 +119,19 @@ class LWViTEncoder(nn.Module):
         invalid_indexes = window_indexes - set(range(depth))
         if invalid_indexes:
             raise ValueError(f"Invalid LW window block indexes: {sorted(invalid_indexes)}")
+        self.out_feature_indexes = tuple(int(index) for index in out_feature_indexes)
+        if len(set(self.out_feature_indexes)) != len(self.out_feature_indexes):
+            raise ValueError(f"Duplicate LW output feature indexes: {self.out_feature_indexes}")
+        invalid_output_indexes = set(self.out_feature_indexes) - set(range(depth))
+        if invalid_output_indexes:
+            raise ValueError(f"Invalid LW output feature indexes: {sorted(invalid_output_indexes)}")
         self.blocks = nn.ModuleList(
             LWBlock(window=index in window_indexes, drop_path=drop_paths[index])
             for index in range(depth)
         )
-        self._out_features = [index in {2, 4, 5, 9} for index in range(depth)]
-        self._out_feature_channels = [768] * 4
+        output_indexes = set(self.out_feature_indexes)
+        self._out_features = [index in output_indexes for index in range(depth)]
+        self._out_feature_channels = [768] * len(self.out_feature_indexes)
         trunc_normal_(self.pos_embed, std=0.02)
         self.apply(self._init_weights)
 
@@ -271,10 +283,26 @@ class LWDetrBackbone(nn.Module):
         self,
         weights_path: str | None,
         window_block_indexes: tuple[int, ...] | list[int] = (0, 1, 3, 6, 7, 9),
+        out_feature_indexes: tuple[int, ...] | list[int] = (2, 4, 5, 9),
+        projector_type: str = "official",
+        proj_dim: int = 256,
     ) -> None:
         super().__init__()
-        self.encoder = LWViTEncoder(tuple(window_block_indexes))
-        self.projector = LWMultiScaleProjector()
+        self.encoder = LWViTEncoder(tuple(window_block_indexes), tuple(out_feature_indexes))
+        self.projector_type = projector_type
+        if projector_type == "official":
+            if tuple(out_feature_indexes) != (2, 4, 5, 9):
+                raise ValueError("The official LW projector requires output blocks (2, 4, 5, 9).")
+            self.projector = LWMultiScaleProjector()
+        elif projector_type == "ec":
+            self.projector = nn.ModuleList(
+                ConvNormLayer_fuse(768, proj_dim, kernel_size=1, stride=1)
+                for _ in range(3)
+            )
+        else:
+            raise ValueError(
+                f"Unknown projector_type={projector_type!r}; expected 'official' or 'ec'."
+            )
         self.loaded_parameter_groups: tuple[str, ...] = ()
         if weights_path is not None:
             self._load_weights(weights_path)
@@ -296,21 +324,39 @@ class LWDetrBackbone(nn.Module):
             raise TypeError(f"Expected a model state dictionary in {path}, got {type(state).__name__}")
 
         encoder_state = self._extract_group(state, "backbone.0.encoder.")
-        projector_state = self._extract_group(state, "backbone.0.projector.")
         self.encoder.load_state_dict(encoder_state, strict=True)
-        self.projector.load_state_dict(projector_state, strict=True)
-        self.loaded_parameter_groups = ("encoder", "projector")
         elements = sum(tensor.numel() for tensor in encoder_state.values())
-        elements += sum(tensor.numel() for tensor in projector_state.values())
+        if self.projector_type == "official":
+            projector_state = self._extract_group(state, "backbone.0.projector.")
+            self.projector.load_state_dict(projector_state, strict=True)
+            self.loaded_parameter_groups = ("encoder", "projector")
+            elements += sum(tensor.numel() for tensor in projector_state.values())
+            tensor_count = len(encoder_state) + len(projector_state)
+            description = "encoder+projector"
+        else:
+            self.loaded_parameter_groups = ("encoder",)
+            tensor_count = len(encoder_state)
+            description = "encoder only"
         print(
-            f"Loaded LW-DETR xlarge encoder+projector only: {path} "
-            f"({len(encoder_state) + len(projector_state)} tensors, {elements} elements); "
-            "EC decoder remains randomly initialized",
+            f"Loaded LW-DETR xlarge {description}: {path} "
+            f"({tensor_count} tensors, {elements} elements); "
+            "detector-side modules remain randomly initialized",
             flush=True,
         )
 
     def forward(self, x: torch.Tensor) -> list[torch.Tensor]:
-        return self.projector(self.encoder(x))
+        features = self.encoder(x)
+        if self.projector_type == "official":
+            return self.projector(features)
+
+        fused = torch.stack(features, dim=0).mean(dim=0)
+        height, width = fused.shape[-2:]
+        outputs = []
+        for index, scale in enumerate((2.0, 1.0, 0.5)):
+            size = (max(1, round(height * scale)), max(1, round(width * scale)))
+            feature = F.interpolate(fused, size=size, mode="bilinear", align_corners=False)
+            outputs.append(self.projector[index](feature))
+        return outputs
 
 
 __all__ = ["LWDetrBackbone"]

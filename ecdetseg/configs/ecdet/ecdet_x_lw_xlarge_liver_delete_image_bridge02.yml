@@ -1,0 +1,11 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_delete_image_hybrid02.yml',
+]
+
+# Same projection/decoder as hybrid02, without detector-side HybridEncoder.
+output_dir: outputs/ablation/ecdet_x_lw_xlarge_liver_delete_image_bridge02
+
+ECDet:
+  backbone: LWDetrBackbone
+  encoder: IdentityEncoder
+  decoder: ECTransformer

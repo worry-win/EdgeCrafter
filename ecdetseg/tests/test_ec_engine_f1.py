@@ -155,7 +155,7 @@ class EcEngineF1Test(unittest.TestCase):
             expected_f1.mean(),
         )
 
-    def test_yolo_overall_uses_mean_pr_harmonic_and_excludes_zero_f1(self):
+    def test_yolo_overall_uses_all_class_mean_pr_then_harmonic_f1(self):
         recalls = np.array([0.0, 0.5, 1.0])
         iou_thresholds = np.linspace(0.50, 0.95, 10)
         precision = np.zeros((10, 3, 3, 1, 1), dtype=np.float64)
@@ -180,15 +180,20 @@ class EcEngineF1Test(unittest.TestCase):
         summary = summarize_yolo_pr_curve_metrics(coco_eval, coco_gt)
         overall = summary["yolo_overall"]
         class_metrics = summary["yolo_per_class"]
-        expected = 2 * 0.8 * 0.75 / (0.8 + 0.75)
+        expected_precision = (0.8 + 0.8 + 0.0) / 3
+        expected_recall = (0.5 + 1.0 + 0.0) / 3
+        expected = (
+            2 * expected_precision * expected_recall
+            / (expected_precision + expected_recall)
+        )
         mean_class_f1 = np.mean([
             class_metrics[0]["f1"],
             class_metrics[1]["f1"],
         ])
 
         self.assertEqual(class_metrics[2]["f1"], 0.0)
-        self.assertAlmostEqual(overall["precision"], 0.8)
-        self.assertAlmostEqual(overall["recall"], 0.75)
+        self.assertAlmostEqual(overall["precision"], expected_precision)
+        self.assertAlmostEqual(overall["recall"], expected_recall)
         self.assertAlmostEqual(overall["f1"], expected)
         self.assertNotAlmostEqual(overall["f1"], mean_class_f1)
 

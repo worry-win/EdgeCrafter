@@ -1,0 +1,8 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec4_liver_delete_image_scratch_bg_noise.yml',
+]
+
+output_dir: outputs/ablation/ecdet_l_dinov2s_dec4_liver_delete_image_pretrained_bg_noise_bs32_2gpu_seed42
+
+DinoV2Adapter:
+  skip_load_backbone: false

@@ -1,0 +1,10 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec4_liver_delete_image_scratch.yml',
+]
+
+# Controlled counterpart to the scratch run: keep the architecture, data and
+# optimizer unchanged, but load the DINOv2-S ImageNet pretraining checkpoint.
+output_dir: outputs/ablation/ecdet_l_dinov2s_dec4_liver_delete_image_pretrained_bs32_2gpu_seed42
+
+DinoV2Adapter:
+  skip_load_backbone: false

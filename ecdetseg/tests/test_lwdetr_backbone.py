@@ -1,5 +1,6 @@
 import unittest
 import re
+from unittest import mock
 
 import torch
 
@@ -8,6 +9,23 @@ from ecdetseg.engine.edgecrafter.lwdetr_backbone import LWDetrBackbone
 
 
 class LWDetrBackboneTest(unittest.TestCase):
+    def test_block_8_9_mean_ec_projector_forward_contract(self):
+        model = LWDetrBackbone(
+            weights_path=None,
+            out_feature_indexes=[8, 9],
+            projector_type="ec",
+        )
+        model.eval()
+
+        with torch.no_grad():
+            features = model(torch.randn(1, 3, 128, 128))
+
+        self.assertEqual(model.encoder.out_feature_indexes, (8, 9))
+        self.assertEqual(
+            [tuple(feature.shape) for feature in features],
+            [(1, 256, 16, 16), (1, 256, 8, 8), (1, 256, 4, 4)],
+        )
+
     def test_lwdetr_xlarge_encoder_neck_forward_contract(self):
         model = LWDetrBackbone(weights_path=None)
         model.eval()
@@ -29,6 +47,40 @@ class LWDetrBackboneTest(unittest.TestCase):
             torch.save({"model": {"unrelated.weight": torch.ones(1)}}, checkpoint)
             with self.assertRaisesRegex(KeyError, "backbone.0.encoder"):
                 LWDetrBackbone(weights_path=str(checkpoint))
+
+    def test_ec_projector_loads_encoder_only_and_default_loads_both_groups(self):
+        import tempfile
+        from pathlib import Path
+
+        state = {
+            "backbone.0.encoder.example": torch.ones(1),
+            "backbone.0.projector.example": torch.ones(2),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = Path(directory) / "lwdetr.pth"
+            checkpoint.touch()
+            with mock.patch("torch.load", return_value={"model": state}), \
+                    mock.patch(
+                        "ecdetseg.engine.edgecrafter.lwdetr_backbone.LWViTEncoder.load_state_dict"
+                    ) as load_encoder, \
+                    mock.patch(
+                        "ecdetseg.engine.edgecrafter.lwdetr_backbone.LWMultiScaleProjector.load_state_dict"
+                    ) as load_official_projector:
+                ec_model = LWDetrBackbone(
+                    weights_path=str(checkpoint),
+                    out_feature_indexes=[8, 9],
+                    projector_type="ec",
+                )
+                self.assertEqual(ec_model.loaded_parameter_groups, ("encoder",))
+                load_encoder.assert_called_once_with({"example": state["backbone.0.encoder.example"]}, strict=True)
+                load_official_projector.assert_not_called()
+
+                load_encoder.reset_mock()
+                LWDetrBackbone(weights_path=str(checkpoint))
+                self.assertEqual(load_encoder.call_count, 1)
+                self.assertEqual(load_official_projector.call_count, 1)
+                self.assertTrue(load_encoder.call_args.kwargs["strict"])
+                self.assertTrue(load_official_projector.call_args.kwargs["strict"])
 
     def test_all_global_encoder_has_no_window_blocks(self):
         model = LWDetrBackbone(weights_path=None, window_block_indexes=[])
@@ -99,6 +151,33 @@ class LWDetrBackboneTest(unittest.TestCase):
             re.findall(pattern, "backbone.encoder.blocks.0.norm1.weight")
             for pattern in default_no_decay_patterns
         ))
+
+    def test_block_8_9_hybrid_and_bridge_config_contracts(self):
+        expected = {
+            "hybrid01": ("HybridEncoder", 5e-4),
+            "hybrid02": ("HybridEncoder", 5e-5),
+            "bridge02": ("IdentityEncoder", 5e-5),
+        }
+        for experiment, (encoder, projection_lr) in expected.items():
+            with self.subTest(experiment=experiment):
+                config = load_config(
+                    "ecdetseg/configs/ecdet/"
+                    f"ecdet_x_lw_xlarge_liver_delete_image_{experiment}.yml",
+                    {},
+                )
+                self.assertEqual(config["ECDet"]["encoder"], encoder)
+                self.assertEqual(config["LWDetrBackbone"]["out_feature_indexes"], [8, 9])
+                self.assertEqual(config["LWDetrBackbone"]["projector_type"], "ec")
+                self.assertEqual(config["ECTransformer"]["feat_channels"], [256, 256, 256])
+                self.assertEqual(config["ECTransformer"]["num_levels"], 3)
+                self.assertEqual(config["ECTransformer"]["num_points"], [3, 6, 3])
+                projection_lrs = {
+                    group["lr"]
+                    for group in config["optimizer"]["params"]
+                    if group["params"].startswith("^(?=.*backbone\\.projector)")
+                }
+                self.assertEqual(projection_lrs, {projection_lr})
+                self.assertEqual(config["optimizer"]["lr"], 5e-4)
 
 
 if __name__ == "__main__":

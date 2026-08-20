@@ -117,10 +117,7 @@ def summarize_yolo_pr_curve_metrics(coco_eval, coco_gt):
         }
 
     def aggregate(class_metrics):
-        # This matches the target algorithm, but excluding fully failed classes
-        # can make the aggregate F1 optimistic.
-        valid = [metric for metric in class_metrics if metric['f1'] > 0]
-        if not valid:
+        if not class_metrics:
             return {
                 'precision': 0.0,
                 'recall': 0.0,
@@ -128,13 +125,13 @@ def summarize_yolo_pr_curve_metrics(coco_eval, coco_gt):
                 'map50': 0.0,
             }
 
-        mean_p = float(np.mean([metric['precision'] for metric in valid]))
-        mean_r = float(np.mean([metric['recall'] for metric in valid]))
+        mean_p = float(np.mean([metric['precision'] for metric in class_metrics]))
+        mean_r = float(np.mean([metric['recall'] for metric in class_metrics]))
         return {
             'precision': mean_p,
             'recall': mean_r,
             'f1': float(2 * mean_p * mean_r / (mean_p + mean_r + 1e-16)),
-            'map50': float(np.mean([metric['ap'] for metric in valid])),
+            'map50': float(np.mean([metric['ap'] for metric in class_metrics])),
         }
 
     metrics_by_iou = [

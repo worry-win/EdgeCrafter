@@ -1,0 +1,56 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_delete_image_allglobal_discriminative_lr.yml',
+]
+
+# LW blocks 8/9 mean -> fresh EC P3/P4/P5 projection -> HybridEncoder -> ECDet-X.
+output_dir: outputs/ablation/ecdet_x_lw_xlarge_liver_delete_image_hybrid01
+
+ECDet:
+  backbone: LWDetrBackbone
+  encoder: HybridEncoder
+  decoder: ECTransformer
+
+LWDetrBackbone:
+  weights_path: /cobot/Code/CODE/LW-DETR-main/pretrain_weights/LWDETR_xlarge_30e_objects365.pth
+  window_block_indexes: []
+  out_feature_indexes: [8, 9]
+  projector_type: ec
+  proj_dim: 256
+
+HybridEncoder:
+  in_channels: [256, 256, 256]
+  feat_strides: [8, 16, 32]
+  hidden_dim: 256
+  use_encoder_idx: [2]
+  num_encoder_layers: 1
+  dim_feedforward: 2048
+  expansion: 1.5
+  fuse_op: sum
+
+ECTransformer:
+  feat_channels: [256, 256, 256]
+  feat_strides: [8, 16, 32]
+  num_levels: 3
+  num_points: [3, 6, 3]
+  num_layers: 4
+  dim_feedforward: 2048
+
+optimizer:
+  params:
+    -
+      params: '^(?=.*backbone\.encoder)(?!.*(?:norm|bias|pos_embed|gamma_)).*$'
+      lr: 0.00001
+    -
+      params: '^(?=.*backbone\.encoder)(?=.*(?:norm|bias|pos_embed|gamma_)).*$'
+      lr: 0.00001
+      weight_decay: 0.0
+    -
+      params: '^(?=.*backbone\.projector)(?!.*(?:norm|bn|bias)).*$'
+      lr: 0.0005
+    -
+      params: '^(?=.*backbone\.projector)(?=.*(?:norm|bn|bias)).*$'
+      lr: 0.0005
+      weight_decay: 0.0
+    -
+      params: '^(?!backbone\.)(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.0
