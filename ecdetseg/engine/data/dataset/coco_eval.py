@@ -109,9 +109,25 @@ class CocoEvaluator(object):
 
 
     def synchronize_between_processes(self):
+        has_global_results = True
         for iou_type in self.iou_types:
             self.eval_imgs[iou_type] = np.concatenate(self.eval_imgs[iou_type], 2)
-            create_common_coco_eval(self.coco_eval[iou_type], self.img_ids, self.eval_imgs[iou_type])
+            merged_img_ids, merged_eval_imgs = merge(
+                self.img_ids,
+                self.eval_imgs[iou_type],
+            )
+            if merged_img_ids is None:
+                self.eval_imgs[iou_type] = []
+                has_global_results = False
+                continue
+            self.img_ids = merged_img_ids.tolist()
+            self.eval_imgs[iou_type] = merged_eval_imgs
+            create_common_coco_eval_from_merged(
+                self.coco_eval[iou_type],
+                merged_img_ids,
+                merged_eval_imgs,
+            )
+        return has_global_results
 
     def accumulate(self):
         for coco_eval in self.coco_eval.values():
@@ -248,7 +264,7 @@ def get_world_size():
         return 1
     return dist.get_world_size()
 
-def all_gather(data):
+def gather_on_main(data):
     """
     Run all_gather on arbitrary picklable data (not necessarily tensors)
     Args:
@@ -256,15 +272,18 @@ def all_gather(data):
     Returns:
         list[data]: list of data gathered from each rank
     """
-    return dist_utils.all_gather(data)
+    return dist_utils.gather_on_main(data)
 
 def merge(img_ids, eval_imgs):
     """
     img_ids: list[int]
     eval_imgs: list[np.ndarray], each shape [numCats, numAreaRng, numImgs_rank]
     """
-    all_img_ids = all_gather(img_ids)
-    all_eval_imgs = all_gather(eval_imgs)
+    all_img_ids = gather_on_main(img_ids)
+    all_eval_imgs = gather_on_main(eval_imgs)
+
+    if all_img_ids is None or all_eval_imgs is None:
+        return None, None
 
     merged = {}
 
@@ -278,6 +297,16 @@ def merge(img_ids, eval_imgs):
     merged_eval_imgs = np.stack(list(merged.values()), axis=2)
 
     return merged_img_ids, merged_eval_imgs
+
+
+def create_common_coco_eval_from_merged(coco_eval, img_ids, eval_imgs):
+    """Install already-merged evaluation data without another collective."""
+    img_ids = list(img_ids)
+    eval_imgs = list(eval_imgs.flatten())
+
+    coco_eval.evalImgs = eval_imgs
+    coco_eval.params.imgIds = img_ids
+    coco_eval._paramsEval = copy.deepcopy(coco_eval.params)
 
 
 

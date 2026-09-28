@@ -32,6 +32,14 @@ def _metric_values(value):
 
 class ECSolver(BaseSolver):
 
+    def _should_evaluate_before_resume(self):
+        """Return whether a resumed run should re-evaluate its checkpoint."""
+        return self.last_epoch > 0 and not getattr(
+            self.cfg,
+            'skip_resume_eval',
+            False,
+        )
+
     def _primary_eval_key(self):
         return f'coco_eval_{self.iou_type}'
 
@@ -109,10 +117,13 @@ class ECSolver(BaseSolver):
             state['early_stop_state'] = dict(self._early_stop_state)
         if hasattr(self, '_best_eval_state'):
             state['best_eval_state'] = dict(self._best_eval_state)
+        if getattr(self, '_train_progress', None):
+            state['train_progress'] = dict(self._train_progress)
         return state
 
     def load_state_dict(self, state):
         super().load_state_dict(state)
+        self._train_progress = dict(state.get('train_progress', {}))
         self._best_eval_state = dict(state.get('best_eval_state', {}))
         if self._best_eval_state:
             self._early_stop_state = dict(state.get('early_stop_state', {}))
@@ -120,6 +131,35 @@ class ECSolver(BaseSolver):
             # Older checkpoints monitored mAP50-95 in this field. Rebuild it
             # from the resumed evaluation instead of reusing changed semantics.
             self._early_stop_state = {}
+
+    def _resume_position(self):
+        progress = dict(getattr(self, '_train_progress', {}))
+        if progress:
+            epoch = int(progress.get('epoch', self.last_epoch + 1))
+            step = max(0, int(progress.get('step', 0)))
+            if epoch >= self.last_epoch + 1:
+                return epoch, step
+        return self.last_epoch + 1, 0
+
+    def _save_rolling_step_checkpoint(self, epoch, completed_steps):
+        self._train_progress = {
+            'epoch': int(epoch),
+            'step': int(completed_steps),
+        }
+        if dist_utils.is_dist_available_and_initialized():
+            torch.distributed.barrier()
+        if self.output_dir:
+            dist_utils.save_on_master(
+                self.state_dict(),
+                self.output_dir / 'last_step.pth',
+            )
+        if dist_utils.is_dist_available_and_initialized():
+            torch.distributed.barrier()
+        if dist_utils.is_main_process():
+            print(
+                f'Rolling checkpoint saved at epoch={epoch}, '
+                f'step={completed_steps}'
+            )
 
     def fit(self, ):
         self.train()
@@ -146,7 +186,7 @@ class ECSolver(BaseSolver):
         self._best_eval_state = dict(getattr(self, '_best_eval_state', {}))
         self._early_stop_state = dict(getattr(self, '_early_stop_state', {}))
         # evaluate again before resume training
-        if self.last_epoch > 0:
+        if self._should_evaluate_before_resume():
             module = self.ema.module if self.ema else self.model
             test_stats, coco_evaluator = evaluate(
                 module,
@@ -170,7 +210,7 @@ class ECSolver(BaseSolver):
             print(f'best_stat: {self._best_eval_state}')
 
         start_time = time.time()
-        start_epoch = self.last_epoch + 1
+        start_epoch, resume_step = self._resume_position()
         for epoch in range(start_epoch, args.epochs):
 
             self.train_dataloader.set_epoch(epoch)
@@ -204,8 +244,19 @@ class ECSolver(BaseSolver):
                 ema=self.ema, 
                 scaler=self.scaler, 
                 lr_warmup_scheduler=self.lr_warmup_scheduler,
+                gradient_accumulation_steps=args.gradient_accumulation_steps,
+                start_step=resume_step if epoch == start_epoch else 0,
+                checkpoint_interval_steps=getattr(
+                    args,
+                    'checkpoint_interval_steps',
+                    0,
+                ),
+                checkpoint_callback=self._save_rolling_step_checkpoint,
                 writer=self.writer
             )
+
+            self._train_progress = {}
+            resume_step = 0
 
             if not self.self_lr_scheduler:  # update by epoch 
                 if self.lr_warmup_scheduler is None or self.lr_warmup_scheduler.finished():

@@ -8,6 +8,7 @@ Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 
 
 import math
+import itertools
 import sys
 import warnings
 from typing import Iterable
@@ -59,6 +60,12 @@ def summarize_pr_curve_f1(coco_eval):
         'recall_iou95': recall_by_iou[-1],
         'f1_iou50_95_mean': float(np.mean(f1_by_iou)),
     }
+
+
+def _optimizer_step_due(batch_index: int, num_batches: int, accumulation_steps: int) -> bool:
+    """Whether this micro-batch closes an accumulation window or the epoch."""
+    return ((batch_index + 1) % accumulation_steps == 0
+            or batch_index + 1 == num_batches)
 
 
 def summarize_yolo_pr_curve_metrics(coco_eval, coco_gt):
@@ -191,10 +198,28 @@ def summarize_yolo_pr_curve_metrics(coco_eval, coco_gt):
     }
 
 
+class _BatchSlice:
+    """Iterate over the unprocessed suffix of an epoch."""
+
+    def __init__(self, data_loader, start_step=0):
+        self.data_loader = data_loader
+        self.start_step = max(0, int(start_step))
+
+    def __iter__(self):
+        return itertools.islice(iter(self.data_loader), self.start_step, None)
+
+    def __len__(self):
+        return max(0, len(self.data_loader) - self.start_step)
+
+
 def train_one_epoch(self_lr_scheduler, lr_scheduler, model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, max_norm: float = 0, **kwargs):
     model.train()
+    # YAMLConfig marks a frozen backbone; restore eval mode after the
+    # recursive train() call so BatchNorm/dropout state cannot drift.
+    if getattr(model, '_freeze_backbone', False):
+        model.backbone.eval()
     criterion.train()
     metric_logger = MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', SmoothedValue(window_size=1, fmt='{value:.6f}'))
@@ -206,10 +231,22 @@ def train_one_epoch(self_lr_scheduler, lr_scheduler, model: torch.nn.Module, cri
     ema :ModelEMA = kwargs.get('ema', None)
     scaler :GradScaler = kwargs.get('scaler', None)
     lr_warmup_scheduler = kwargs.get('lr_warmup_scheduler', None)
+    accumulation_steps = max(1, int(kwargs.get('gradient_accumulation_steps', 1)))
+    start_step = max(0, int(kwargs.get('start_step', 0)))
+    checkpoint_interval_steps = max(
+        0,
+        int(kwargs.get('checkpoint_interval_steps', 0)),
+    )
+    checkpoint_callback = kwargs.get('checkpoint_callback')
+    optimizer.zero_grad(set_to_none=True)
 
     cur_iters = epoch * len(data_loader)
+    epoch_loader = _BatchSlice(data_loader, start_step=start_step)
 
-    for i, (samples, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    for relative_i, (samples, targets) in enumerate(
+        metric_logger.log_every(epoch_loader, print_freq, header)
+    ):
+        i = start_step + relative_i
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         global_step = epoch * len(data_loader) + i
@@ -235,36 +272,40 @@ def train_one_epoch(self_lr_scheduler, lr_scheduler, model: torch.nn.Module, cri
                 loss_dict = criterion(outputs, targets, **metas)
 
             loss = sum(loss_dict.values())
-            scaler.scale(loss).backward()
+            scaler.scale(loss / accumulation_steps).backward()
 
-            if max_norm > 0:
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+            should_step = _optimizer_step_due(i, len(data_loader), accumulation_steps)
+            if should_step:
+                if max_norm > 0:
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
 
-            scaler.step(optimizer)
-            scaler.update()
-            optimizer.zero_grad()
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)
 
         else:
             outputs = model(samples, targets=targets)
             loss_dict = criterion(outputs, targets, **metas)
 
             loss : torch.Tensor = sum(loss_dict.values())
-            optimizer.zero_grad()
-            loss.backward()
+            (loss / accumulation_steps).backward()
 
-            if max_norm > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+            should_step = _optimizer_step_due(i, len(data_loader), accumulation_steps)
+            if should_step:
+                if max_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
 
-            optimizer.step()
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
 
         # ema
-        if ema is not None:
+        if ema is not None and should_step:
             ema.update(model)
 
-        if self_lr_scheduler:
+        if self_lr_scheduler and should_step:
             optimizer = lr_scheduler.step(cur_iters + i, optimizer)
-        else:
+        elif not self_lr_scheduler and should_step:
             if lr_warmup_scheduler is not None:
                 lr_warmup_scheduler.step()
 
@@ -285,6 +326,15 @@ def train_one_epoch(self_lr_scheduler, lr_scheduler, model: torch.nn.Module, cri
                 writer.add_scalar(f'Lr/pg_{j}', pg['lr'], global_step)
             for k, v in loss_dict_reduced.items():
                 writer.add_scalar(f'Loss/{k}', v.item(), global_step)
+
+        completed_steps = i + 1
+        if (
+            should_step
+            and checkpoint_callback is not None
+            and checkpoint_interval_steps > 0
+            and completed_steps % checkpoint_interval_steps == 0
+        ):
+            checkpoint_callback(epoch, completed_steps)
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
@@ -328,8 +378,16 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
+    has_global_results = True
     if coco_evaluator is not None:
-        coco_evaluator.synchronize_between_processes()
+        sync_result = coco_evaluator.synchronize_between_processes()
+        if sync_result is not None:
+            has_global_results = bool(sync_result)
+
+    if coco_evaluator is not None and not has_global_results:
+        stats_holder = [None]
+        torch.distributed.broadcast_object_list(stats_holder, src=0)
+        return stats_holder[0], coco_evaluator
 
     # accumulate predictions from all images
     if coco_evaluator is not None:
@@ -429,5 +487,9 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
                 )
                 if table is not None:
                     print(table)
+
+    if coco_evaluator is not None and dist_utils.is_dist_available_and_initialized():
+        stats_holder = [stats]
+        torch.distributed.broadcast_object_list(stats_holder, src=0)
 
     return stats, coco_evaluator

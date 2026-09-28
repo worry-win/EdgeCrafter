@@ -1,0 +1,94 @@
+__include__: ['ecdet_l.yml']
+
+# =============================================================================
+# Shared contract of the five-arm breast backbone-complementarity comparison.
+# Family tag: cmp5L = comparison / 5 arms / ECDet-L detector.
+#
+# Arms (index == Slurm array task id):
+#   0  ecdet_l_dinov2s_breast_cmp5L_363_100e_es20.yml          DINOv2-S  ViT-S/16
+#   1  ecdet_l_dinov2b_breast_cmp5L_363_100e_es20.yml          DINOv2-B  ViT-B/16
+#   2  ecdet_l_lw_xlarge_breast_cmp5L_363_100e_es20.yml        LW-DETR-xlarge encoder
+#   3  ecdet_l_mae_dino_vitb_breast_cmp5L_363_100e_es20.yml     ultrasound MAE ViT-B/16
+#   4  ecdet_l_ecvits_official_breast_cmp5L_363_100e_es20.yml   official ECViT-S
+#
+# Every arm inherits this file and changes ONLY its backbone section, so the
+# detector side is pinned to one ECDet-L contract:
+#   neck    HybridEncoder   expansion 0.75 / FFN 1024 / hidden 256 / P3-P4-P5
+#   decoder ECTransformer   4 layers / FFN 1024 / hidden 256 / 300 queries /
+#                           3 levels / num_points [3,6,3] / eval_idx -1
+# =============================================================================
+
+output_dir: outputs/ablation/ecdet_l_breast_cmp5L
+num_classes: 4
+remap_mscoco_category: false
+
+epochs: 100
+early_stop_patience: 20
+# 2 GPUs x 8 images x 2 accumulation steps = 32 effective global batch,
+# which matches the historical breast runs at per-GPU batch 8.
+gradient_accumulation_steps: 2
+
+eval_spatial_size: [640, 640]
+
+# --- ECDet-L detector side: identical in every arm ---------------------------
+HybridEncoder:
+  in_channels: [256, 256, 256]
+  feat_strides: [8, 16, 32]
+  hidden_dim: 256
+  depth_mult: 1
+  expansion: 0.75
+  dim_feedforward: 1024
+
+ECTransformer:
+  feat_channels: [256, 256, 256]
+  feat_strides: [8, 16, 32]
+  hidden_dim: 256
+  num_levels: 3
+  num_layers: 4
+  eval_idx: -1
+  num_queries: 300
+  num_points: [3, 6, 3]
+  dim_feedforward: 1024
+
+# --- Unified optimizer for all five arms -------------------------------------
+# One rule: everything under `backbone.` (this includes that arm's own feature
+# projector) trains at 1e-5; every other module (neck, decoder, heads) trains
+# at the 5e-4 default. The three patterns below are mutually exclusive, which
+# is required by engine/core/yaml_config.py::get_optim_params (a parameter
+# matching two patterns would land in two AdamW groups and raise).
+optimizer:
+  type: AdamW
+  lr: 0.0005
+  betas: [0.9, 0.999]
+  weight_decay: 0.000125
+  params:
+    -
+      params: '^backbone\.(?!.*(?:norm|bn|bias|pos_embed|gamma_)).*$'
+      lr: 0.00001
+    -
+      params: '^backbone\.(?=.*(?:norm|bn|bias|pos_embed|gamma_)).*$'
+      lr: 0.00001
+      weight_decay: 0.0
+    -
+      params: '^(?!backbone\.)(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.0
+
+# --- breast split: identical for all five arms -------------------------------
+train_dataloader:
+  total_batch_size: 16
+  dataset:
+    img_folder: /cobot/Data/Lesion_det/det_breast/img
+    ann_file: /cobot/Data/Lesion_det/det_breast/annotations/Lesion/Ignore_Delete-Image/train.json
+    transforms:
+      mosaic_epoch: 24
+      mosaic_prob: 1
+      stop_epoch: 98
+  collate_fn:
+    mixup_prob: 1
+    mixup_epoch: 24
+
+val_dataloader:
+  total_batch_size: 16
+  dataset:
+    img_folder: /cobot/Data/Lesion_det/det_breast/img
+    ann_file: /cobot/Data/Lesion_det/det_breast/annotations/Lesion/Ignore_Delete-Image/valid.json

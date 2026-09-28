@@ -1,0 +1,7 @@
+__include__: ['ecdet_l_dinov2s_breast_cmp5L_363_100e_es20.yml']
+
+# Full original 100-epoch recipe; only disable early stopping for the six-arm study.
+early_stop_patience: 0
+# Save atomically after every complete epoch; exact mid-epoch worker RNG replay
+# is not guaranteed, so do not advertise step-level recovery.
+checkpoint_interval_steps: 0
