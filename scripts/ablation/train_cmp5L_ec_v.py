@@ -139,10 +139,10 @@ def grad_norm(loss, parameters):
     return float(torch.stack(terms).sum().sqrt()) if terms else 0.0
 
 
-def aggregate_calibration_coverage(ratios_by_rank, classes_by_rank):
+def aggregate_calibration_coverage(ratios_by_rank, classes_by_rank, *, num_classes=4):
     pooled = [value for rank_values in ratios_by_rank for value in rank_values]
     classes = {str(index): sum(int(rank_counts[str(index)]) for rank_counts in classes_by_rank)
-               for index in range(4)}
+               for index in range(num_classes)}
     if len(pooled) < 3 or any(value == 0 for value in classes.values()):
         raise RuntimeError(f'insufficient effective calibration: valid={len(pooled)}, classes={classes}')
     return pooled, classes
@@ -308,7 +308,8 @@ def objective(arm, outputs, teacher_logits, targets, matcher, *, global_images, 
     if v_arm == 'V4':
         boxed = quality_filtered_box_kd(
             outputs['pred_boxes'], ACTIVE.teacher_boxes[-1], targets, matches,
-            global_image_count=global_images, ddp_world_size=ddp_world)
+            global_image_count=global_images, ddp_world_size=ddp_world,
+            num_classes=ACTIVE.num_classes)
         rank_coefficient = ACTIVE.coefficient
         box_coefficient = ACTIVE.solver.calibration.get('box_coefficient')
         if rank_coefficient is not None and box_coefficient is not None:
@@ -469,6 +470,7 @@ def diagnose_fixed_gradient_ratio(runtime, epoch, steps):
 class Runtime:
     def __init__(self, solver, args):
         self.solver = solver
+        self.num_classes = int(solver.cfg.yaml_cfg['num_classes'])
         self.arm = args.arm
         self.y_arm = args.y_arm
         self.args = args
@@ -691,7 +693,7 @@ def _calibrate_ranking(runtime):
     if not l3:
         raise RuntimeError('decoder L3 calibration parameter bucket is empty')
     rows, ratios = [], []
-    classes = {str(index): 0 for index in range(4)}
+    classes = {str(index): 0 for index in range(runtime.num_classes)}
     try:
         for index, record in enumerate(runtime.manifest['batches']):
             batch_path = resolve_calibration_batch_path(runtime.args.manifest, record['path'])
@@ -739,7 +741,8 @@ def _calibrate_ranking(runtime):
         else:
             ratios_by_rank[0] = ratios
             classes_by_rank[0] = classes
-        pooled_ratios, global_classes = aggregate_calibration_coverage(ratios_by_rank, classes_by_rank)
+        pooled_ratios, global_classes = aggregate_calibration_coverage(
+            ratios_by_rank, classes_by_rank, num_classes=runtime.num_classes)
         coefficient, median = calibration_coefficient_from_rank_ratios(ratios_by_rank)
         runtime.coefficient = coefficient
         runtime.solver.calibration = {'coefficient': coefficient, 'median_raw_ratio': median,
@@ -799,7 +802,8 @@ def calibrate(runtime):
                 matches = final_layer_hungarian_matches(criterion.matcher, outputs, targets)
                 box = quality_filtered_box_kd(outputs['pred_boxes'], audit['teacher_boxes'][-1],
                                               targets, matches, global_image_count=len(targets),
-                                              ddp_world_size=1)
+                                              ddp_world_size=1,
+                                              num_classes=runtime.num_classes)
             row = {'image_ids': record['image_ids'], 'purpose': record['purpose'],
                    'active_count': box['active_count'],
                    'active_class_counts': box['active_class_counts'],
@@ -884,8 +888,8 @@ def train_one_epoch_ecfull(self_lr_scheduler, lr_scheduler, model, criterion, da
                               valid_duct_sets=0)
     counts = {'matched': 0, 'valid_pairs': 0, 'reverse_pairs': 0,
               'positive_active': 0, 'negative_active': 0, 'empty_images': 0,
-              **{f'matched_class_{category}': 0 for category in range(4)},
-              **{f'active_class_{category}': 0 for category in range(4)}}
+              **{f'matched_class_{category}': 0 for category in range(runtime.num_classes)},
+              **{f'active_class_{category}': 0 for category in range(runtime.num_classes)}}
     x5_before = runtime.intervention_microbatches
     x5_eligible_before = runtime.eligible_microbatches
     for offset, (samples, raw_targets) in enumerate(

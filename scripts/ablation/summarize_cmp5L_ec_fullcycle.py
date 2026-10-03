@@ -55,7 +55,8 @@ def main(args):
         calibration = None
     annotation = json.loads(Path(args.ann_file).read_text())
     image_ids = [int(item['id']) for item in annotation['images']]
-    if len(image_ids) != 2975 or len(set(image_ids)) != 2975:
+    expected_images = int(getattr(args, 'expected_images', 2975))
+    if len(image_ids) != expected_images or len(set(image_ids)) != expected_images:
         raise RuntimeError('validation image IDs changed')
     annotations_by_image = {image_id: [] for image_id in image_ids}
     for item in annotation['annotations']:
@@ -80,7 +81,7 @@ def main(args):
         metrics_path = root / f'validation_{name}' / 'metrics.json'
         prediction_path = metrics_path.with_name('metrics.predictions.jsonl')
         record = json.loads(metrics_path.read_text())
-        if record['meta']['weights'] != 'ema' or int(record['meta']['n_images']) != 2975:
+        if record['meta']['weights'] != 'ema' or int(record['meta']['n_images']) != expected_images:
             raise RuntimeError(f'{name} EMA/validation coverage mismatch')
         if any(not math.isfinite(float(value)) for key, value in record['metrics'].items()
                if key in ('ap', 'ap50', 'ap75', 'ar100', 'precision', 'recall', 'f1')):
@@ -130,4 +131,5 @@ if __name__ == '__main__':
     parser.add_argument('--manifest', required=True)
     parser.add_argument('--init-sha256', required=True)
     parser.add_argument('--ann-file', required=True)
+    parser.add_argument('--expected-images', type=int, default=2975)
     main(parser.parse_args())

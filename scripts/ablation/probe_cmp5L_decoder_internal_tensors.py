@@ -272,7 +272,7 @@ def _build(args):
             "shuffle": False,
             "drop_last": False,
         },
-        "num_classes": 4,
+        "num_classes": getattr(args, "num_classes", 4),
         "remap_mscoco_category": False,
     })
     for name in ("ViTAdapter", "DinoV2Adapter"):

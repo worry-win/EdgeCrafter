@@ -1,0 +1,31 @@
+/home/wanrui/miniconda3/envs/ec/lib/python3.13/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+test_calibration_coverage_is_global_across_ranks (test_cmp5l_ec_v.VContractTests.test_calibration_coverage_is_global_across_ranks) ... ok
+test_reference_recipes_have_distinct_teacher_modes (test_cmp5l_ec_v.VContractTests.test_reference_recipes_have_distinct_teacher_modes) ... ok
+test_two_gpu_batch_contract (test_cmp5l_ec_v.VContractTests.test_two_gpu_batch_contract) ... ok
+test_v2_averages_four_independent_ranking_layers (test_cmp5l_ec_v.VContractTests.test_v2_averages_four_independent_ranking_layers) ... /opt/wanrui/EdgeCrafter_V3_V4_frozen/ecdetseg/tests/test_cmp5l_ec_v.py:46: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  self.assertAlmostEqual(float(result['loss']), float(torch.stack(result['layer_losses']).mean()), places=6)
+ok
+test_v2_teacher_layer_capture_restores_eval_state (test_cmp5l_ec_v.VContractTests.test_v2_teacher_layer_capture_restores_eval_state) ... ok
+test_v3_softmax_is_over_candidates_and_skips_reverse_teacher (test_cmp5l_ec_v.VContractTests.test_v3_softmax_is_over_candidates_and_skips_reverse_teacher) ... ok
+test_v4_box_calibration_waits_for_epoch10_student (test_cmp5l_ec_v.VContractTests.test_v4_box_calibration_waits_for_epoch10_student) ... ok
+test_v4_cpu_matcher_indices_with_cuda_boxes (test_cmp5l_ec_v.VContractTests.test_v4_cpu_matcher_indices_with_cuda_boxes) ... ok
+test_v4_only_distills_teacher_box_that_improves_same_gt (test_cmp5l_ec_v.VContractTests.test_v4_only_distills_teacher_box_that_improves_same_gt) ... ok
+test_v5_weights_only_positive_np_increment_without_changing_denominator (test_cmp5l_ec_v.VContractTests.test_v5_weights_only_positive_np_increment_without_changing_denominator) ... ok
+test_v6_teacher_view_changes_only_background_strength (test_cmp5l_ec_v.VContractTests.test_v6_teacher_view_changes_only_background_strength) ... ok
+test_v7_encoder_prediction_identity_not_loss_equality (test_cmp5l_ec_v.VContractTests.test_v7_encoder_prediction_identity_not_loss_equality) ... ok
+test_v7_native_forward_binds_to_calibration_copy (test_cmp5l_ec_v.VContractTests.test_v7_native_forward_binds_to_calibration_copy) ... ok
+test_v7_student_intervention_does_not_taper_with_kd (test_cmp5l_ec_v.VContractTests.test_v7_student_intervention_does_not_taper_with_kd) ... ok
+test_v8_fixed_reference_observes_common_logit_shift (test_cmp5l_ec_v.VContractTests.test_v8_fixed_reference_observes_common_logit_shift) ... ok
+test_v8_reference_probability_chain_and_empty_cases (test_cmp5l_ec_v.VContractTests.test_v8_reference_probability_chain_and_empty_cases) ... ok
+test_selects_train_only_pairs_for_each_class_and_empty_control (test_kidney_ec_v.KidneyCalibrationSelectionTests.test_selects_train_only_pairs_for_each_class_and_empty_control) ... ok
+test_multiple_pairs_per_class_are_disjoint (test_kidney_ec_v.KidneyExpandedCalibrationSelectionTests.test_multiple_pairs_per_class_are_disjoint) ... ok
+test_box_kd_counts_kidney_class_five (test_kidney_ec_v.KidneyVClassTests.test_box_kd_counts_kidney_class_five) ... ok
+test_calibration_requires_all_six_classes (test_kidney_ec_v.KidneyVClassTests.test_calibration_requires_all_six_classes) ... ok
+test_all_v_configs_resolve_to_six_class_csg_dataset (test_kidney_ec_v.KidneyVConfigTests.test_all_v_configs_resolve_to_six_class_csg_dataset) ... ok
+
+----------------------------------------------------------------------
+Ran 21 tests in 0.775s
+
+OK

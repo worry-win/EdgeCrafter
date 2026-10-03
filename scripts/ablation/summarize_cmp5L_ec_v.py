@@ -66,4 +66,5 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser()
     for name in ('arm', 'v-arm', 'out-dir', 'config', 'manifest', 'init-sha256', 'ann-file'):
         p.add_argument('--' + name, required=True)
+    p.add_argument('--expected-images', type=int, default=2975)
     main(p.parse_args())

@@ -140,6 +140,7 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--expected-images", type=int, default=2011)
+    parser.add_argument("--num-classes", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=200)
     return parser.parse_args()
 

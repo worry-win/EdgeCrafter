@@ -234,7 +234,7 @@ def _aligned_giou(first, second):
 
 
 def quality_filtered_box_kd(student_boxes, teacher_boxes, targets, matches, *,
-                            global_image_count, ddp_world_size):
+                            global_image_count, ddp_world_size, num_classes=4):
     """V4: detach teacher, only on matched GT whose teacher box is reliably better."""
     teacher_boxes = teacher_boxes.detach().float()
     if student_boxes.shape != teacher_boxes.shape or student_boxes.ndim != 3:
@@ -246,7 +246,7 @@ def quality_filtered_box_kd(student_boxes, teacher_boxes, targets, matches, *,
     zero = student_boxes.sum() * 0
     total = zero
     active = matched_count = 0
-    active_classes = {str(i): 0 for i in range(4)}
+    active_classes = {str(i): 0 for i in range(num_classes)}
     for b, (target, (query_ids, target_ids)) in enumerate(zip(targets, matches)):
         with torch.no_grad():
             query_ids = query_ids.to(student_boxes.device)

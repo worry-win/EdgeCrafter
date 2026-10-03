@@ -1,0 +1,15 @@
+# Kidney six-lesion-class adaptation; cmp5L source config stays intact.
+__include__: ['ecdet_l_dinov2s_cmp5L_ECV3.yml']
+output_dir: outputs/ablation/kidney_EC_V_v1/V3
+num_classes: 6
+remap_mscoco_category: false
+DinoV2Adapter:
+  weights_path: /opt/public/wanrui/model/dinov2/dinov2_vits14_reg4_pretrain.pth
+train_dataloader:
+  dataset:
+    img_folder: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/images_CSG_200m
+    ann_file: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/annotations/Lesion_Det/v2_260729/train.json
+val_dataloader:
+  dataset:
+    img_folder: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/images_CSG_200m
+    ann_file: /opt/public/wangzhiwei/Ultrasound_Data/COCO_Output/肾脏/annotations/Lesion_Det/v2_260729/val.json
