@@ -13,7 +13,10 @@ cfg=code/'ecdetseg/configs/ecdet/ecdet_l_dinov2s_cmp5L_ECV3_4L.yml'
 resolved=load_config(str(cfg),{});validate_v_execution(resolved,world_size=2)
 assert (resolved['ec_fullcycle_arm'],resolved['ec_y_arm'])==recipe('V3_4L')
 original=dict(lock['configs']['V3']['resolved']);modified=dict(resolved)
-assert original.pop('ec_v_arm')=='V3' and modified.pop('ec_v_arm')=='V3_4L' and original==modified
+assert original.pop('ec_v_arm')=='V3' and modified.pop('ec_v_arm')=='V3_4L'
+# Include pointers are provenance metadata; all resolved training fields must match.
+original.pop('__include__',None);modified.pop('__include__',None)
+assert original==modified
 for rel,h in lock['original_source_manifests']['code_snapshot_v1'].items():
  if not rel.startswith('slurm/'):assert sha(code/rel)==h,rel
 assert sha(lock['initialization']['path'])==lock['initialization']['sha256']
