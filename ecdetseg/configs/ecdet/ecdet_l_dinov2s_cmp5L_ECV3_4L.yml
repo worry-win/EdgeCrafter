@@ -1,0 +1,4 @@
+__include__: ['ecdet_l_dinov2s_cmp5L_ECV3.yml']
+ec_v_arm: V3_4L
+# Four independent original V3 sets; losses averaged across all four layers.
+# Coefficient recalibrated train-only at t10 to the original decoder L3 target0.30.

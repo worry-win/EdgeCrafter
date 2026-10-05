@@ -46,3 +46,9 @@ Begin later methods from this branch, keep this baseline recipe immutable, and c
 Checkpoints, data, predictions, logs and outputs are not in Git. Only the necessary Slurm scripts are tracked despite the inherited ignore rule. Cluster asset paths in the historical YAML are explicit provenance; a new environment must provide and verify them before running.
 
 The historical Linux tree contains two test names differing only in `cmp5L` versus `cmp5l`, with identical content. Git preserves both names; case-insensitive macOS may show one physical file. Execution snapshots are verified on Linux against the original full file manifest. This alias has no role in training.
+
+## Authorized extension: V3_4L
+
+One separate breast experiment applies original `candidate_set_kd` at L0/L1/L2/L3. Each layer independently uses its own student Hungarian matches/boxes/logits to select candidates and requires the teacher lesion to rank strictly above all negatives. Four losses average with weights1/4 including invalid zero layers. It uses no reference logit, BCE, box/hidden KD or student intervention. Teacher all-layer export uses the validated V2 path, with child BN/Dropout eval and final-layer parity.
+
+Use `train_cmp5L_ec_v3_four_layer.py` and `slurm/cmp5L_EC_V3_4L_one_arm.sbatch`; original trainer files are unchanged. Full historical V3 recipe/init/split/100 epochs/epoch98 reload remain; t10 coefficients independently recalibrate aggregated loss to L3 gradient ratio0.30. This does not hold total-model KD gradient budget fixed. Compare to contemporaneous V3 Job4526, best EMA main, normal validation only. Output: `outputs/ablation/cmp5L_EC_V3_4L_2026-10-05_v1`.
