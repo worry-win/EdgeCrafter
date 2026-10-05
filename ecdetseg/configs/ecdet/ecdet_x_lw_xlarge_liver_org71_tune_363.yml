@@ -1,0 +1,14 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_delete_image_hybrid01.yml',
+]
+
+# Fine-tune the complete 71-class model through CLI -t. Avoid a redundant
+# Objects365 load before the full pretraining checkpoint is applied.
+output_dir: outputs/ablation/ecdet_x_lw_xlarge_liver_org71_tune_363
+
+LWDetrBackbone:
+  weights_path: ~
+
+ECTransformer:
+  num_points: [3, 6, 3]
+

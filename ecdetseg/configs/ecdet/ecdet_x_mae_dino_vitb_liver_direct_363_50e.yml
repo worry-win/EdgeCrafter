@@ -1,0 +1,7 @@
+__include__: [
+  'ecdet_x_mae_dino_vitb_liver_363_50e.yml',
+]
+
+# Direct liver fine-tuning from the MAE-DINO ViT-B/16 encoder. EC-X projector,
+# HybridEncoder and decoder are randomly initialized (no detector checkpoint).
+output_dir: outputs/ablation/ecdet_x_mae_dino_vitb_liver_direct_363_50e

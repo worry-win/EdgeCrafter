@@ -1,0 +1,25 @@
+__include__: ['ecdet_l_dinov2b_obj365_latest_full_breast_363_100e_es20.yml']
+
+# Short continuation from the completed Breast best.pth with the DINOv2-B
+# backbone trainable. This is intentionally a fresh 10-epoch fine-tuning run.
+output_dir: outputs/finetune/ecdet_l_dinov2b_obj365_breast_unfreeze10_nomosaic_nomixup_8gpu_bs128_seed42
+freeze_backbone: false
+epochs: 10
+early_stop_patience: 10
+
+train_dataloader:
+  total_batch_size: 128
+  num_workers: 3
+  dataset:
+    transforms:
+      policy: stop_epoch
+      mosaic_prob: 0.0
+      mosaic_epoch: 0
+      stop_epoch: 8
+  collate_fn:
+    mixup_prob: 0.0
+    mixup_epoch: 0
+
+val_dataloader:
+  total_batch_size: 128
+  num_workers: 3

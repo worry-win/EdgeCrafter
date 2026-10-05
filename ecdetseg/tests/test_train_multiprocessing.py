@@ -1,5 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
+import os
 import sys
 import unittest
 from unittest import mock
@@ -37,6 +38,33 @@ class TrainMultiprocessingTest(unittest.TestCase):
             mp.set_sharing_strategy(original_strategy)
 
         self.assertEqual(observed_strategy, "file_system")
+
+    def test_main_honors_sharing_strategy_environment_override(self):
+        original_strategy = mp.get_sharing_strategy()
+        observed_strategy = None
+
+        def observe_strategy(*_args, **_kwargs):
+            nonlocal observed_strategy
+            observed_strategy = mp.get_sharing_strategy()
+            raise RuntimeError("stop after observing startup configuration")
+
+        args = SimpleNamespace(print_rank=0, print_method="builtin", seed=42)
+        try:
+            with mock.patch.dict(
+                os.environ,
+                {"EC_MP_SHARING_STRATEGY": "file_descriptor"},
+            ):
+                with mock.patch.object(
+                    train.dist_utils,
+                    "setup_distributed",
+                    side_effect=observe_strategy,
+                ):
+                    with self.assertRaisesRegex(RuntimeError, "stop after observing"):
+                        train.main(args)
+        finally:
+            mp.set_sharing_strategy(original_strategy)
+
+        self.assertEqual(observed_strategy, "file_descriptor")
 
 
 if __name__ == "__main__":

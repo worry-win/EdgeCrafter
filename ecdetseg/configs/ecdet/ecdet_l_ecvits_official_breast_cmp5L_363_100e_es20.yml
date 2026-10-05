@@ -1,0 +1,45 @@
+__include__: ['ecdet_l_breast_cmp5L_base.yml']
+
+# =============================================================================
+# cmp5L arm 4/4 -- official EdgeCrafter ECViT-S backbone (backbone-only init).
+#
+# Initialisation: ONLY the ECViT-S encoder is taken from the official ECDet-L
+# detector pre-trained on Objects365 and then fine-tuned on COCO
+#   /cobot/Code/xiangshaochong/checkpoints/ec/ecdet_l_o3652coco.pth
+# The 166 encoder tensors were extracted out of that detector checkpoint into
+#   /cobot/Code/wanrui/EdgeCrafter/ecdetseg/ecvits/ecvits_o365_ecdet_l_backbone.pth
+# because ViTAdapter._load_weights() deliberately REJECTS a full detector
+# checkpoint (it refuses to silently load a filtered subset) and requires a raw
+# ECViT state dict. The extracted key set is identical to the released
+# ecvits.pth, but 163/166 tensors differ numerically (max |delta| 6.14), i.e.
+# this file carries the Objects365 -> COCO *trained* encoder, not the raw
+# release. Using the trained encoder is what keeps this arm faithful to the
+# "official obj365 ECDet-L" backbone it is meant to represent.
+#
+# The neck/decoder/heads stay randomly initialised, exactly as in arms 0-3, so
+# this arm is now structurally and procedurally identical to the other four:
+#   pretrained backbone + random ECDet-L detector side.
+#
+# HISTORY: the first attempt (job 2249_4) used a WHOLE-MODEL init through the
+# training entry point `-t` on the same detector checkpoint. It crashed at
+# epoch 0 / iteration 0 with NaN boxes (box_ops.generalized_box_iou assertion),
+# because the pre-trained-but-head-swapped detector (11 tensors under the
+# 80->4 class-head remap stay random) emitted overflowed box parameters on
+# out-of-domain grayscale ultrasound input. Its step-0 loss was 55.57 against
+# 40.24-42.49 for the four random-detector arms. Do NOT reintroduce `-t` here
+# without the numerical hardening described in the analysis report.
+# =============================================================================
+
+output_dir: outputs/ablation/ecdet_l_ecvits_official_breast_cmp5L_363_100e_es20_bs32_2gpu_seed42
+
+ECDet:
+  backbone: ViTAdapter
+
+ViTAdapter:
+  name: ecvits
+  embed_dim: 384
+  num_heads: 6
+  proj_dim: 256
+  interaction_indexes: [10, 11]
+  weights_path: /cobot/Code/wanrui/EdgeCrafter/ecdetseg/ecvits/ecvits_o365_ecdet_l_backbone.pth
+  skip_load_backbone: false

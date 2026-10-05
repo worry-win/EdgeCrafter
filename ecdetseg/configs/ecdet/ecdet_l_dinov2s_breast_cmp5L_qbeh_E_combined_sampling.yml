@@ -1,0 +1,2 @@
+__include__: ['ecdet_l_dinov2s_breast_cmp5L_qbeh_15e_base.yml']
+output_dir: outputs/ablation/cmp5L_query_behavior_kd/E_combined_sampling

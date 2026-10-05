@@ -1,0 +1,2 @@
+__include__: ['ecdet_l_dinov2s_cmp5L_ecfull_base.yml']
+ec_fullcycle_arm: ECX0

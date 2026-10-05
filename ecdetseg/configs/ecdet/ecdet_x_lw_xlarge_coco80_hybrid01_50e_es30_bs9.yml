@@ -1,0 +1,12 @@
+__include__: [
+  'ecdet_x_lw_xlarge_coco80_hybrid01_50e_es30_bs10.yml',
+]
+
+# Fresh COCO training with nine images per GPU on eight GPUs.
+output_dir: outputs/pretrain/ecdet_x_lw_xlarge_coco80_hybrid01_50e_es30_bs9
+
+train_dataloader:
+  total_batch_size: 72
+
+val_dataloader:
+  total_batch_size: 72

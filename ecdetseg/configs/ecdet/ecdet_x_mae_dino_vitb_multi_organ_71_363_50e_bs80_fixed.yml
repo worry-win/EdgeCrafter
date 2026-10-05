@@ -1,0 +1,14 @@
+__include__: [
+  'ecdet_x_mae_dino_vitb_multi_organ_71_363_50e_bs40.yml',
+]
+
+# Fixed 50-epoch 8-GPU pretraining; early stopping is deliberately disabled.
+output_dir: outputs/pretrain/ecdet_x_mae_dino_vitb_multi_organ_71_363_50e_bs80_fixed
+epochs: 50
+early_stop_patience: 0
+
+train_dataloader:
+  total_batch_size: 80
+
+val_dataloader:
+  total_batch_size: 80

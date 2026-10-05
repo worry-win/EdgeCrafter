@@ -1,0 +1,10 @@
+__include__: [
+  'ecdet_x_mae_dino_vitb_liver_direct_363_100e_es10.yml',
+]
+
+# The CLI -t checkpoint initializes the complete 71-class MAE-DINO detector.
+# Do not first load only the upstream MAE-DINO backbone checkpoint.
+output_dir: outputs/ablation/ecdet_x_mae_dino_vitb_liver_org71_full_363_100e_es10
+
+MAEDinoViTBackbone:
+  weights_path: ~

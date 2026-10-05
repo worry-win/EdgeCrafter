@@ -1,0 +1,17 @@
+__include__: [
+  'ecdet_l_dinov2s_patch16_dec4_liver_delete_image_pretrained.yml',
+]
+
+# Match the established 50-epoch Liver LW fine-tuning protocol.
+output_dir: outputs/ablation/ecdet_l_dinov2s_liver_363_50e
+epochs: 50
+early_stop_patience: 0
+
+ECTransformer:
+  dim_feedforward: 1024
+  num_points: [3, 6, 3]
+
+train_dataloader:
+  dataset:
+    transforms:
+      stop_epoch: 48

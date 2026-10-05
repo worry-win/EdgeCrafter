@@ -6,6 +6,7 @@ Copyright(c) 2023 lyuwenyu. All Rights Reserved.
 # from ._dataset import DetDataset
 from .coco_dataset import (CocoDetection, mscoco_category2label,
                            mscoco_category2name, mscoco_label2category)
+from .sqlite_coco_dataset import SqliteCocoDetection
 from .coco_eval import CocoEvaluator
 from .coco_utils import get_coco_api_from_dataset
 from .voc_detection import VOCDetection

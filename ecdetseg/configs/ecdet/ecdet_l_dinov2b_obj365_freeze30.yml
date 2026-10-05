@@ -1,0 +1,38 @@
+__include__: [
+  'ecdet_l_dinov2s_ecl_o365_decoderbody_breast_363_100e_es20.yml',
+]
+
+# DINOv2-Base backbone + ECDet-L neck/decoder on Objects365.
+# Only the official DINOv2-Base backbone is initialized; ECDet-L remains random.
+output_dir: outputs/pretrain/ecdet_l_dinov2b_obj365_freeze30_bs24_8gpu_seed42
+num_classes: 366
+remap_mscoco_category: false
+freeze_backbone: true
+epochs: 30
+early_stop_patience: 0
+checkpoint_freq: 5
+
+DinoV2Adapter:
+  weights_path: /cobot/Code/CODE/eomt/checkpoints/dinov2/vit_base_patch14_reg4_dinov2.pth
+  backbone_name: vit_base_patch14_reg4_dinov2
+  interaction_indexes: [10, 11]
+  skip_load_backbone: false
+
+train_dataloader:
+  total_batch_size: 192
+  dataset:
+    img_folder: /cobot/Code/wanrui/EdgeCrafter/outputs/obj365_image_links
+    ann_file: /cobot/Data/public/Objects365/Objects365/data/zhiyuan_objv2_train.json
+    transforms:
+      mosaic_epoch: 12
+      mosaic_prob: 1.0
+      stop_epoch: 28
+  collate_fn:
+    mixup_prob: 1.0
+    mixup_epoch: 12
+
+val_dataloader:
+  total_batch_size: 192
+  dataset:
+    img_folder: /cobot/Code/wanrui/EdgeCrafter/outputs/obj365_image_links
+    ann_file: /cobot/Data/public/Objects365/Objects365/data/val/zhiyuan_objv2_val.json

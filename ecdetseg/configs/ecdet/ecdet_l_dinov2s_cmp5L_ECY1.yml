@@ -1,0 +1,2 @@
+__include__: ['ecdet_l_dinov2s_cmp5L_ECX3.yml']
+ec_y_arm: Y1

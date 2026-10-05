@@ -1,0 +1,16 @@
+__include__: ['ecdet_l_dinov2b_obj365_fresh_sqlite_8gpu_bs20_w4_nomosaic_nomixup.yml']
+
+output_dir: outputs/pretrain/ecdet_l_dinov2b_obj365_unfreeze10_nomosaic_nomixup_8gpu_bs128_seed42
+freeze_backbone: false
+epochs: 10
+early_stop_patience: 10
+
+train_dataloader:
+  total_batch_size: 128
+  num_workers: 3
+  prefetch_factor: 1
+  persistent_workers: false
+
+val_dataloader:
+  total_batch_size: 128
+  num_workers: 0

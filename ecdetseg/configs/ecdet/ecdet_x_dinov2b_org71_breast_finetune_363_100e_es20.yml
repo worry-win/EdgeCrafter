@@ -1,0 +1,16 @@
+__include__: ['ecdet_x_dinov2b_org71_liver_finetune_363_100e_es10.yml']
+
+# Complete 71-class DINOv2-B + EC-X detector -> 4-class Breast.
+output_dir: outputs/ablation/ecdet_x_dinov2b_org71_breast_finetune_363_100e_es20
+num_classes: 4
+early_stop_patience: 20
+
+train_dataloader:
+  dataset:
+    img_folder: /cobot/Data/Lesion_det/det_breast/img
+    ann_file: /cobot/Data/Lesion_det/det_breast/annotations/Lesion/Ignore_Delete-Image/train.json
+
+val_dataloader:
+  dataset:
+    img_folder: /cobot/Data/Lesion_det/det_breast/img
+    ann_file: /cobot/Data/Lesion_det/det_breast/annotations/Lesion/Ignore_Delete-Image/valid.json

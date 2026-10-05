@@ -1,0 +1,5 @@
+__include__: ['ecdet_x_dinov2b_org71_breast_finetune_363_100e_es20.yml']
+
+# Fresh retraining of 907_1 with a longer early-stopping window.
+output_dir: outputs/ablation/ecdet_x_dinov2b_org71_breast_finetune_363_100e_es30
+early_stop_patience: 30

@@ -1,0 +1,9 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_objects365_363_50e.yml',
+]
+
+output_dir: outputs/ablation/ecdet_liver_lw_objects365_ecx_layerwise363_633_50e
+
+ECTransformer:
+  num_points: [[3, 6, 3], [6, 3, 3], [6, 3, 3], [3, 6, 3]]
+

@@ -113,6 +113,28 @@ class EcSolverMetricsTest(unittest.TestCase):
             },
         )
 
+    def test_resume_eval_can_be_skipped_for_memory_safe_resume(self):
+        self.solver.last_epoch = 1
+        self.solver.cfg = SimpleNamespace(skip_resume_eval=True)
+
+        self.assertFalse(self.solver._should_evaluate_before_resume())
+
+        self.solver.cfg.skip_resume_eval = False
+        self.assertTrue(self.solver._should_evaluate_before_resume())
+
+    def test_step_checkpoint_progress_round_trips(self):
+        self.solver.last_epoch = 1
+        self.solver._train_progress = {"epoch": 2, "step": 5000}
+        checkpoint = self.solver.state_dict()
+
+        resumed = object.__new__(ECSolver)
+        resumed.iou_type = "bbox"
+        resumed.last_epoch = -1
+        resumed.load_state_dict(checkpoint)
+
+        self.assertEqual(resumed._train_progress, {"epoch": 2, "step": 5000})
+        self.assertEqual(resumed._resume_position(), (2, 5000))
+
     def test_fit_saves_best_and_stops_on_map50(self):
         with tempfile.TemporaryDirectory() as output_dir:
             solver = object.__new__(ECSolver)
@@ -125,6 +147,7 @@ class EcSolverMetricsTest(unittest.TestCase):
                 print_freq=10,
                 early_stop_patience=1,
                 early_stop_min_delta=0.0,
+                gradient_accumulation_steps=1,
             )
             solver.train = mock.Mock()
             solver.train_dataloader = _TrainLoader()

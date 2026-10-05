@@ -1,0 +1,18 @@
+__include__: ['ecdet_l_dinov2s_breast_cmp5L_qbeh_15e_base.yml']
+
+# Locked first-round shared-Student-query distillation budget.
+shared_query_kd:
+  enabled: false
+  teacher_checkpoint: /cobot/Code/wanrui/EdgeCrafter/outputs/ablation/ecdet_l_dinov2s_breast_cmp5L_363_100e_es20_bs32_2gpu_seed42/best.pth
+  teacher_memory_mode: none
+  layers: []
+  loss: cosine
+  weight: 0.5
+  output_weight: 0.0
+  output_loss: none
+  output_layer: 3
+  output_all_normal_queries: true
+  detach_teacher: true
+  share_student_initial_query: true
+  share_student_topk: true
+  num_queries: 300

@@ -1,0 +1,13 @@
+__include__: [
+  'ecdet_l_dinov2b_obj365_freeze30_filtered.yml',
+]
+
+# Eight GPUs, batch 16 per GPU. This is the stable memory target for the
+# Objects365 high-GT Mosaic/CDN batches that overflowed at batch 24 and 20.
+output_dir: outputs/pretrain/ecdet_l_dinov2b_obj365_freeze30_filtered_bs16_8gpu_seed42
+
+train_dataloader:
+  total_batch_size: 128
+
+val_dataloader:
+  total_batch_size: 128

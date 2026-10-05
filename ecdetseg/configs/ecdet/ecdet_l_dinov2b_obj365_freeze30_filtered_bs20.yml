@@ -1,0 +1,14 @@
+__include__: [
+  'ecdet_l_dinov2b_obj365_freeze30_filtered.yml',
+]
+
+# Eight GPUs, batch 20 per GPU.  This lowers the peak decoder-attention
+# footprint from the failed batch-24 Objects365 run while preserving all
+# other training settings.
+output_dir: outputs/pretrain/ecdet_l_dinov2b_obj365_freeze30_filtered_bs20_8gpu_seed42
+
+train_dataloader:
+  total_batch_size: 160
+
+val_dataloader:
+  total_batch_size: 160

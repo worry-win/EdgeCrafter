@@ -1,0 +1,26 @@
+__include__: ['ecdet_l_dinov2s_breast_cmp5L_kq_15e_base.yml']
+
+# KQ-B only: stop Mosaic and MixUp from zero-based epoch 9.
+# The original no-strong-augmentation stop_epoch remains 13.
+output_dir: outputs/ablation/cmp5L_shared_query_kd_extensions/KQB
+train_dataloader:
+  dataset:
+    transforms:
+      mosaic_epoch: 9
+  collate_fn:
+    mixup_epoch: 9
+
+# Calibration loads this resolved training recipe but does not invoke the
+# production KQ group validator. The output coefficient is locked afterward.
+shared_query_kd:
+  enabled: true
+  teacher_memory_mode: privileged_np
+  layers: [0, 1, 2, 3]
+  weight: 0.5
+  output_weight: 0.0
+  output_loss: sigmoid_soft_bce_grouped
+  output_all_normal_queries: false
+  output_grouping: hungarian_lesions_top20_far_negatives
+  negative_topk: 20
+  negative_max_iou: 0.3
+  empty_image_output_kd: zero

@@ -1,0 +1,39 @@
+__include__: ['ecdet_l_dinov2s_breast_cmp5L_363_100e_es20.yml']
+
+# One-GPU 15-epoch fine-tuning for the differentiable dep-gate pilots (S0/S1).
+# Same fine-tuning protocol as the qbeh pilots: LR = cmp5L LR x 0.1, batch 8 x acc 4 = 32.
+epochs: 15
+early_stop_patience: 15
+gradient_accumulation_steps: 4
+checkpoint_interval_steps: 25
+print_freq: 25
+warmup_iter: 200
+
+train_dataloader:
+  total_batch_size: 8
+  dataset:
+    transforms:
+      mosaic_epoch: 12
+      stop_epoch: 13
+  collate_fn:
+    mixup_epoch: 12
+
+val_dataloader:
+  total_batch_size: 8
+
+optimizer:
+  type: AdamW
+  lr: 0.00005
+  betas: [0.9, 0.999]
+  weight_decay: 0.000125
+  params:
+    -
+      params: '^backbone\.(?!.*(?:norm|bn|bias|pos_embed|gamma_)).*$'
+      lr: 0.000001
+    -
+      params: '^backbone\.(?=.*(?:norm|bn|bias|pos_embed|gamma_)).*$'
+      lr: 0.000001
+      weight_decay: 0.0
+    -
+      params: '^(?!backbone\.)(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.0

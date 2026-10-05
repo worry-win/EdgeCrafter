@@ -19,6 +19,16 @@ from .workspace import create
 from .yaml_utils import load_config, merge_config, merge_dict
 
 
+def freeze_backbone_parameters(model: nn.Module) -> None:
+    """Freeze and keep the detector backbone in eval mode for fine-tuning."""
+    if not hasattr(model, 'backbone'):
+        raise AttributeError("freeze_backbone requires model.backbone")
+    for parameter in model.backbone.parameters():
+        parameter.requires_grad_(False)
+    model.backbone.eval()
+    model._freeze_backbone = True
+
+
 class YAMLConfig(BaseConfig):
     def __init__(self, cfg_path: str, **kwargs) -> None:
         super().__init__()
@@ -41,6 +51,8 @@ class YAMLConfig(BaseConfig):
     def model(self, ) -> torch.nn.Module:
         if self._model is None and 'model' in self.yaml_cfg:
             self._model = create(self.yaml_cfg['model'], self.global_cfg)
+            if self.yaml_cfg.get('freeze_backbone', False):
+                freeze_backbone_parameters(self._model)
         return super().model
 
     @property

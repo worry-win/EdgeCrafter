@@ -1,0 +1,25 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_delete_image_hybrid01.yml',
+]
+
+# p3-0: LW blocks 8/9 mean -> fresh EC P3/P4/P5 projection -> HybridEncoder -> ECDet-X.
+# The LW encoder loads Objects365 weights; projection, HybridEncoder, and EC decoder
+# are initialized by the detector training code.
+output_dir: outputs/pretrain/ecdet_x_lw_xlarge_multi_organ_71_hybrid01_50e_es30_bs10_debug
+num_classes: 71
+remap_mscoco_category: false
+epochs: 50
+early_stop_patience: 30
+gradient_accumulation_steps: 1
+
+train_dataloader:
+  total_batch_size: 80
+  dataset:
+    img_folder: /cobot/Data/seg_all_moreOrgan/images
+    ann_file: /cobot/Data/seg_all_moreOrgan/instances_train.json
+
+val_dataloader:
+  total_batch_size: 80
+  dataset:
+    img_folder: /cobot/Data/seg_all_moreOrgan/images
+    ann_file: /cobot/Data/seg_all_moreOrgan/instances_test.json

@@ -1,0 +1,20 @@
+__include__: ['ecdet_l_breast_cmp5L_base.yml']
+
+# =============================================================================
+# cmp5L arm 3/4 -- ultrasound MAE ViT-B/16 student encoder.
+# The checkpoint is the encoder-only student of the ultrasound MAE-DINO
+# pretraining (cls token / patch_embed / 12 blocks / norm); its distillation
+# teacher was DINOv2-L/14, which is NOT part of this arm.
+# All 12 blocks are loaded and trained; the EC projector, ECDet-L
+# neck/decoder and heads stay random (seed 42).
+# =============================================================================
+
+output_dir: outputs/ablation/ecdet_l_mae_dino_vitb_breast_cmp5L_363_100e_es20_bs32_2gpu_seed42
+
+ECDet:
+  backbone: MAEDinoViTBackbone
+
+MAEDinoViTBackbone:
+  weights_path: /cobot/Code/CODE/MAE_DINO/output/dinov2_visible_cls_croped1m_iter500000_base/mae_dino-checkpoint-500000iter.pth
+  out_feature_indexes: [10, 11]
+  proj_dim: 256

@@ -71,11 +71,15 @@ class BaseConfig(object):
         self.default_ema_warmups: int = 2000
         self.sync_bn :bool = False
         self.clip_max_norm : float = 0.
+        self.gradient_accumulation_steps :int = 1
         self.find_unused_parameters :bool = None
 
         self.seed :int = None
         self.print_freq :int = None
         self.checkpoint_freq :int = 1
+        # Optional step-level recovery checkpoints for long epochs.
+        self.checkpoint_interval_steps :int = 0
+        self.skip_resume_eval :bool = False
         self.early_stop_patience :int = 0
         self.early_stop_min_delta :float = 0.0
         self.output_dir :str = None

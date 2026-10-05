@@ -1,0 +1,7 @@
+__include__: ['ecdet_l_dinov2s_cmp5L_ECY1.yml']
+ec_v_arm: V1
+ec_fullcycle_arm: ECX3
+ec_y_arm: Y1
+train_dataloader:
+  total_batch_size: 32
+gradient_accumulation_steps: 1

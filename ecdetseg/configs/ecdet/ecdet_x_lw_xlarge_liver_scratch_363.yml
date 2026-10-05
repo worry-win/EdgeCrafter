@@ -1,0 +1,13 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_delete_image_hybrid01.yml',
+]
+
+# Full random initialization: no Objects365 LW encoder and no detector tuning.
+output_dir: outputs/ablation/ecdet_x_lw_xlarge_liver_scratch_363
+
+LWDetrBackbone:
+  weights_path: ~
+
+ECTransformer:
+  num_points: [3, 6, 3]
+

@@ -56,19 +56,33 @@ class CocoEvalCollectiveTest(unittest.TestCase):
         self.assertEqual(evaluator.coco_eval["bbox"].params.catIds, list(range(7)))
         self.assertEqual([result["category_id"] for result in prepared], [6])
 
-    def test_picklable_data_uses_the_shared_object_collective(self):
+    def test_picklable_data_is_collected_only_on_main_process(self):
         payload = {"img_ids": [1, 2, 3]}
         gathered = [payload, {"img_ids": [4]}]
 
         with mock.patch.object(
             coco_eval.dist_utils,
-            "all_gather",
+            "gather_on_main",
             return_value=gathered,
-        ) as shared_all_gather:
-            result = coco_eval.all_gather(payload)
+        ) as gather_on_main:
+            result = coco_eval.gather_on_main(payload)
 
         self.assertIs(result, gathered)
-        shared_all_gather.assert_called_once_with(payload)
+        gather_on_main.assert_called_once_with(payload)
+
+    def test_non_main_merge_does_not_materialize_global_results(self):
+        img_ids = [1, 2]
+        eval_imgs = object()
+
+        with mock.patch.object(
+            coco_eval,
+            "gather_on_main",
+            side_effect=[None, None],
+        ):
+            merged_ids, merged_eval_imgs = coco_eval.merge(img_ids, eval_imgs)
+
+        self.assertIsNone(merged_ids)
+        self.assertIsNone(merged_eval_imgs)
 
 
 if __name__ == "__main__":

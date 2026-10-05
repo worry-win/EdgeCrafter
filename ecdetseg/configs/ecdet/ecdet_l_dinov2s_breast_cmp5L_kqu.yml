@@ -1,0 +1,24 @@
+__include__: ['ecdet_l_dinov2s_breast_cmp5L_kq_15e_base.yml']
+
+# KQ-U: one-way lesion GT-class lift plus far-negative class suppression.
+output_dir: outputs/ablation/cmp5L_KQR_KQU/KQU
+train_dataloader:
+  dataset:
+    transforms:
+      mosaic_epoch: 12
+      stop_epoch: 13
+  collate_fn:
+    mixup_epoch: 12
+shared_query_kd:
+  enabled: true
+  teacher_memory_mode: privileged_np
+  layers: [0, 1, 2, 3]
+  weight: 0.5
+  output_weight: 6.196734780239296
+  output_loss: one_way_sigmoid_soft_bce
+  output_layer: 3
+  output_all_normal_queries: false
+  output_grouping: hungarian_lesions_top20_far_negatives
+  negative_topk: 20
+  negative_max_iou: 0.3
+  empty_image_output_kd: zero

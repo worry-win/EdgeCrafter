@@ -1,0 +1,9 @@
+__include__: ['ecdet_l_dinov2b_ecl_o365_decoderbody_breast_363_100e_es20.yml']
+
+# Full-model transfer from the in-progress Objects365 DINOv2-B + ECDet-L run.
+# The Slurm launcher snapshots the latest best.pth when its allocation starts.
+output_dir: outputs/finetune/ecdet_l_dinov2b_obj365_latest_full_breast_363_100e_es20_bs32_4gpu_seed42
+num_classes: 4
+epochs: 100
+early_stop_patience: 20
+

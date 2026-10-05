@@ -1,0 +1,18 @@
+__include__: ['ecdet_l_dinov2s_breast_cmp5L_kq_15e_base.yml']
+
+# Train-only, no-step calibration for the two independently locked objectives.
+output_dir: outputs/ablation/cmp5L_KQR_KQU/calibration/precal
+train_dataloader:
+  dataset:
+    transforms:
+      mosaic_epoch: 12
+      stop_epoch: 13
+  collate_fn:
+    mixup_epoch: 12
+shared_query_kd:
+  enabled: true
+  teacher_memory_mode: privileged_np
+  layers: [0, 1, 2, 3]
+  weight: 0.5
+  output_weight: 0.0
+  output_loss: none

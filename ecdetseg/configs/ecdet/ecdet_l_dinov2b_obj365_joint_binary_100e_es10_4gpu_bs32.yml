@@ -1,0 +1,12 @@
+__include__: ['ecdet_l_dinov2b_obj365_joint17_100e_es10_4gpu_bs32.yml']
+
+output_dir: outputs/finetune/ecdet_l_dinov2b_obj365_unfreeze10_joint_binary_100e_es10_bs32_4gpu_seed42
+num_classes: 1
+
+train_dataloader:
+  dataset:
+    ann_file: /cobot/Code/wanrui/EdgeCrafter/outputs/datasets/joint_lesion_binary_17to1/annotations/instances_train.json
+
+val_dataloader:
+  dataset:
+    ann_file: /cobot/Code/wanrui/EdgeCrafter/outputs/datasets/joint_lesion_binary_17to1/annotations/instances_valid.json

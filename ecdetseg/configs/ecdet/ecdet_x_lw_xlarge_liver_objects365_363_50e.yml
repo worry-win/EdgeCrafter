@@ -1,0 +1,11 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_delete_image_hybrid01.yml',
+]
+
+# Official LW-DETR Objects365 weights initialize only the LW encoder.
+# The EC projector, ECDet-X HybridEncoder, decoder, and prediction heads remain random.
+output_dir: outputs/ablation/ecdet_liver_lw_objects365_ecx_363_50e
+
+ECTransformer:
+  num_points: [3, 6, 3]
+

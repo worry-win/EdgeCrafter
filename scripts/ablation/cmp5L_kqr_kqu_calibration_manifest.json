@@ -1,0 +1,15 @@
+{
+  "source": "/cobot/Data/Lesion_det/det_breast/annotations/Lesion/Ignore_Delete-Image/train.json",
+  "selection_rule": "Reuse the seven KQ-B prelocked train-only image pairs and order; map prior post-mix epoch 9 to epoch 12 to match the restored KQ-O 12/12/13 schedule. No outcome-dependent replacement.",
+  "seed": 42,
+  "batch_size": 2,
+  "batches": [
+    {"name": "clean_01_a", "epoch": 13, "image_ids": [2, 4], "purpose": "calibration"},
+    {"name": "clean_23_a", "epoch": 13, "image_ids": [1, 40], "purpose": "calibration"},
+    {"name": "clean_01_b", "epoch": 13, "image_ids": [3, 5], "purpose": "calibration"},
+    {"name": "clean_23_b", "epoch": 13, "image_ids": [95, 59], "purpose": "calibration"},
+    {"name": "post_mix_01", "epoch": 12, "image_ids": [6, 8], "purpose": "calibration"},
+    {"name": "post_mix_23", "epoch": 12, "image_ids": [96, 73], "purpose": "calibration"},
+    {"name": "empty_identity", "epoch": 13, "image_ids": [31, 114], "purpose": "empty_zero_check"}
+  ]
+}

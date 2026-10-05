@@ -1,0 +1,8 @@
+__include__: ['ecdet_l_dinov2s_ecl_o365_decoderbody_breast_363_100e_es20.yml']
+
+output_dir: outputs/ablation/ecdet_l_dinov2b_ecl_o365_decoderbody_breast_363_100e_es20
+DinoV2Adapter:
+  weights_path: /cobot/Code/CODE/eomt/checkpoints/dinov2/vit_base_patch14_reg4_dinov2.pth
+  backbone_name: vit_base_patch14_reg4_dinov2
+  interaction_indexes: [10, 11]
+  skip_load_backbone: false

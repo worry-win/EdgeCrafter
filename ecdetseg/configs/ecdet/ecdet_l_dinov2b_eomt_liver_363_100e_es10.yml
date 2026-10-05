@@ -1,0 +1,16 @@
+__include__: ['ecdet_l_dinov2s_liver_363_50e.yml']
+output_dir: outputs/ablation/ecdet_l_dinov2b_eomt_liver_363_100e_es10_bs32_4gpu_seed42
+epochs: 100
+early_stop_patience: 10
+DinoV2Adapter:
+  weights_path: /cobot/Code/CODE/eomt/checkpoints/dinov2/vit_base_patch14_reg4_dinov2.pth
+  backbone_name: vit_base_patch14_reg4_dinov2
+  interaction_indexes: [10, 11]
+  skip_load_backbone: false
+train_dataloader:
+  total_batch_size: 32
+  dataset:
+    transforms:
+      stop_epoch: 98
+val_dataloader:
+  total_batch_size: 32

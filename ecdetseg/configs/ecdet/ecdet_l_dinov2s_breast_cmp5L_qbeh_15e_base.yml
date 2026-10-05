@@ -1,0 +1,41 @@
+__include__: ['ecdet_l_dinov2s_breast_cmp5L_363_100e_es20.yml']
+
+# One-GPU 15-epoch fine-tuning control shared by A-E.
+epochs: 15
+early_stop_patience: 15
+gradient_accumulation_steps: 4
+checkpoint_interval_steps: 25
+print_freq: 25
+warmup_iter: 200
+
+# Historical effective batch: 1 GPU x 8 x accumulation 4 = 32.
+train_dataloader:
+  total_batch_size: 8
+  dataset:
+    transforms:
+      mosaic_epoch: 12
+      stop_epoch: 13
+  collate_fn:
+    mixup_epoch: 12
+
+val_dataloader:
+  total_batch_size: 8
+
+# Fine-tuning LR = original cmp5L LR x 0.1.
+optimizer:
+  type: AdamW
+  lr: 0.00005
+  betas: [0.9, 0.999]
+  weight_decay: 0.000125
+  params:
+    -
+      params: '^backbone\.(?!.*(?:norm|bn|bias|pos_embed|gamma_)).*$'
+      lr: 0.000001
+    -
+      params: '^backbone\.(?=.*(?:norm|bn|bias|pos_embed|gamma_)).*$'
+      lr: 0.000001
+      weight_decay: 0.0
+    -
+      params: '^(?!backbone\.)(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.0
+

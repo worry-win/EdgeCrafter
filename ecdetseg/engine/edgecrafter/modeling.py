@@ -32,6 +32,12 @@ class _ECBase(nn.Module):
         x = self.encoder(x)
         return x
 
+    def train(self, mode: bool = True):
+        super().train(mode)
+        if getattr(self, '_freeze_backbone', False):
+            self.backbone.eval()
+        return self
+
     def deploy(self):
         self.eval()
         for m in self.modules():

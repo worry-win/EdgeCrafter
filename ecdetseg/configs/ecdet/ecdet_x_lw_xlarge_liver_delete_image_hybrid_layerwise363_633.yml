@@ -1,0 +1,11 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_delete_image_hybrid01.yml',
+]
+
+# Layer-wise deformable-attention ablation:
+# decoder layers 0 and 3 use P3/P4/P5 = 3/6/3;
+# decoder layers 1 and 2 use P3/P4/P5 = 6/3/3.
+output_dir: outputs/ablation/ecdet_x_lw_xlarge_liver_delete_image_hybrid_layerwise363_633
+
+ECTransformer:
+  num_points: [[3, 6, 3], [6, 3, 3], [6, 3, 3], [3, 6, 3]]

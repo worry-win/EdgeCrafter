@@ -1,0 +1,16 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_objects365_363_50e.yml',
+]
+
+# MAE-DINO distilled ViT-B/16: all 12 blocks are loaded and trained; normalized
+# outputs from the final two blocks feed the random EC P3/P4/P5 projector.
+output_dir: outputs/ablation/ecdet_x_mae_dino_vitb_liver_363_50e
+
+ECDet:
+  backbone: MAEDinoViTBackbone
+
+MAEDinoViTBackbone:
+  weights_path: /cobot/Code/CODE/MAE_DINO/output/dinov2_visible_cls_croped1m_iter500000_base/mae_dino-checkpoint-500000iter.pth
+  out_feature_indexes: [10, 11]
+  proj_dim: 256
+

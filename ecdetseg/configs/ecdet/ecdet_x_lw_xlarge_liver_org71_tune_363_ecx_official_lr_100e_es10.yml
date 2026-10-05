@@ -1,0 +1,13 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_org71_tune_363_ecx_official_lr.yml',
+]
+
+# Fresh recovery run: complete 71-class detector -> 7-class Liver, EC-X LR.
+output_dir: outputs/ablation/ecdet_liver_lw_org71_363_ecx_lr_100e_es10
+epochs: 100
+early_stop_patience: 10
+
+train_dataloader:
+  dataset:
+    transforms:
+      stop_epoch: 98

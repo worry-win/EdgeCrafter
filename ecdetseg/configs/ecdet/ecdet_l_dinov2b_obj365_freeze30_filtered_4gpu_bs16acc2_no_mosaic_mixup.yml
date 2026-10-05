@@ -1,0 +1,22 @@
+__include__: [
+  'ecdet_l_dinov2b_obj365_freeze30_filtered_4gpu_bs16acc2.yml',
+]
+
+# Continue the existing run with heavy multi-image augmentation disabled.
+# Keep the epoch markers unchanged because mosaic_epoch also controls the
+# FlatCosine scheduler's flat phase in the current training implementation.
+skip_resume_eval: true
+checkpoint_interval_steps: 5000
+
+train_dataloader:
+  num_workers: 0
+  dataset:
+    transforms:
+      mosaic_prob: 0.0
+      mosaic_epoch: 12
+  collate_fn:
+    mixup_prob: 0.0
+    mixup_epoch: 12
+
+val_dataloader:
+  num_workers: 0

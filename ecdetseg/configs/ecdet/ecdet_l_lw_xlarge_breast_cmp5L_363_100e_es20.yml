@@ -1,0 +1,21 @@
+__include__: ['ecdet_l_breast_cmp5L_base.yml']
+
+# =============================================================================
+# cmp5L arm 2/4 -- official LW-DETR xlarge Objects365 encoder.
+# Only the LW encoder is initialised from the official Objects365-30e
+# checkpoint; the EC projector, ECDet-L neck/decoder and heads stay random
+# (seed 42). This is the same backbone family as the earlier "EdgeCrafter"
+# candidate, but re-attached to the ECDet-L detector contract.
+# =============================================================================
+
+output_dir: outputs/ablation/ecdet_l_lw_xlarge_breast_cmp5L_363_100e_es20_bs32_2gpu_seed42
+
+ECDet:
+  backbone: LWDetrBackbone
+
+LWDetrBackbone:
+  weights_path: /cobot/Code/CODE/LW-DETR-main/pretrain_weights/LWDETR_xlarge_30e_objects365.pth
+  window_block_indexes: []
+  out_feature_indexes: [8, 9]
+  projector_type: ec
+  proj_dim: 256

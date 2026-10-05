@@ -1,0 +1,21 @@
+__include__: ['ecdet_l_breast_cmp5L_base.yml']
+
+# =============================================================================
+# cmp5L arm 1/4 -- official DINOv2-B backbone (ViT-B/14 + 4 registers).
+# Only the backbone is initialised from the official checkpoint; the
+# ECDet-L projector/neck/decoder/heads stay random (seed 42).
+# Same adapter family and patch14 -> patch16 resizing as arm 0.
+# =============================================================================
+
+output_dir: outputs/ablation/ecdet_l_dinov2b_breast_cmp5L_363_100e_es20_bs32_2gpu_seed42
+
+ECDet:
+  backbone: DinoV2Adapter
+
+DinoV2Adapter:
+  weights_path: /cobot/Code/CODE/eomt/checkpoints/dinov2/vit_base_patch14_reg4_dinov2.pth
+  backbone_name: vit_base_patch14_reg4_dinov2
+  patch_size: 16
+  proj_dim: 256
+  interaction_indexes: [10, 11]
+  skip_load_backbone: false

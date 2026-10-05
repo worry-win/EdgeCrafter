@@ -1,0 +1,20 @@
+__include__: [
+  'ecdet_x_lw_xlarge_multi_organ_71_hybrid01_50e_es30_bs10_debug.yml',
+]
+output_dir: outputs/pretrain/ecdet_x_lw_xlarge_joint4organ_100e_es10_bs10_8gpu_seed42
+num_classes: 17
+epochs: 100
+early_stop_patience: 10
+train_dataloader:
+  total_batch_size: 80
+  dataset:
+    img_folder: /cobot/Data/Lesion_det/joint4organ/images
+    ann_file: /cobot/Data/Lesion_det/joint4organ/instances_train.json
+val_dataloader:
+  total_batch_size: 80
+  dataset:
+    img_folder: /cobot/Data/Lesion_det/joint4organ/images
+    ann_file: /cobot/Data/Lesion_det/joint4organ/instances_valid.json
+ECCriterion:
+  ignore_iou_threshold: 0.5
+  ignore_iof_threshold: 0.7

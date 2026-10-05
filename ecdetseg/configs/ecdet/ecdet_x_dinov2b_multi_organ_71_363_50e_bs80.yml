@@ -1,0 +1,66 @@
+__include__: [
+  'ecdet_l_dinov2b_eomt_liver_363_100e_es10.yml',
+]
+
+# DINOv2-B/14 encoder -> random EC-X projector/neck/decoder.
+# Pretrain the complete detector on the established 71-class multi-organ set.
+output_dir: outputs/pretrain/ecdet_x_dinov2b_multi_organ_71_363_50e_bs80
+num_classes: 71
+remap_mscoco_category: false
+epochs: 50
+early_stop_patience: 0
+gradient_accumulation_steps: 1
+
+HybridEncoder:
+  in_channels: [256, 256, 256]
+  hidden_dim: 256
+  depth_mult: 1
+  expansion: 1.5
+  dim_feedforward: 2048
+
+ECTransformer:
+  feat_channels: [256, 256, 256]
+  hidden_dim: 256
+  num_layers: 4
+  dim_feedforward: 2048
+  num_points: [3, 6, 3]
+
+# Train the official DINO encoder conservatively while allowing the random
+# EC projector and detector modules to learn at the detector learning rate.
+optimizer:
+  type: AdamW
+  params:
+    -
+      params: '^(?=.*backbone\.backbone)(?!.*(?:norm|bias|pos_embed|gamma_)).*$'
+      lr: 0.00001
+    -
+      params: '^(?=.*backbone\.backbone)(?=.*(?:norm|bias|pos_embed|gamma_)).*$'
+      lr: 0.00001
+      weight_decay: 0.0
+    -
+      params: '^(?=.*backbone\.projector)(?!.*(?:norm|bn|bias)).*$'
+      lr: 0.0005
+    -
+      params: '^(?=.*backbone\.projector)(?=.*(?:norm|bn|bias)).*$'
+      lr: 0.0005
+      weight_decay: 0.0
+    -
+      params: '^(?!backbone\.)(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.0
+  lr: 0.0005
+  betas: [0.9, 0.999]
+  weight_decay: 0.000125
+
+train_dataloader:
+  total_batch_size: 80
+  dataset:
+    img_folder: /cobot/Data/seg_all_moreOrgan/images
+    ann_file: /cobot/Data/seg_all_moreOrgan/instances_train.json
+    transforms:
+      stop_epoch: 48
+
+val_dataloader:
+  total_batch_size: 80
+  dataset:
+    img_folder: /cobot/Data/seg_all_moreOrgan/images
+    ann_file: /cobot/Data/seg_all_moreOrgan/instances_test.json

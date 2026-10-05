@@ -81,6 +81,7 @@ def deformable_attention_core_func_v2(\
     num_points_list: List[int],
     method='default',
     value_shape='default',
+    sample_coefficients=None,
     ):
     """
     Args:
@@ -140,7 +141,19 @@ def deformable_attention_core_func_v2(\
         sampling_value_list.append(sampling_value_l)
 
     attn_weights = attention_weights.permute(0, 2, 1, 3).reshape(bs * n_head, 1, Len_q, sum(num_points_list))
-    weighted_sample_locs = torch.concat(sampling_value_list, dim=-1) * attn_weights
+    sampled_values = torch.concat(sampling_value_list, dim=-1)
+    if sample_coefficients is not None:
+        expected = (bs, Len_q, n_head, sum(num_points_list))
+        if tuple(sample_coefficients.shape) != expected:
+            raise ValueError(
+                f'sample_coefficients must have shape {expected}, '
+                f'got {tuple(sample_coefficients.shape)}'
+            )
+        coefficients = sample_coefficients.permute(0, 2, 1, 3).reshape(
+            bs * n_head, 1, Len_q, sum(num_points_list)
+        )
+        sampled_values = sampled_values * coefficients
+    weighted_sample_locs = sampled_values * attn_weights
     output = weighted_sample_locs.sum(-1).reshape(bs, n_head * c, Len_q)
 
     return output.permute(0, 2, 1)

@@ -1,0 +1,10 @@
+__include__: [
+  'ecdet_l_dinov2b_obj365_freeze30_filtered_4gpu_bs16acc2_sqlite_no_mosaic_mixup.yml',
+]
+
+# Isolated resume recipe for reducing per-rank DataLoader pressure.  All model,
+# optimizer, data, augmentation, batch, and checkpoint settings are inherited.
+train_dataloader:
+  num_workers: 2
+  prefetch_factor: 1
+  persistent_workers: false

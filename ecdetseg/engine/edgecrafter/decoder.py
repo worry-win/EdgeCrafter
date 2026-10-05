@@ -27,7 +27,43 @@ from .utils import (bias_init_with_prob, deformable_attention_core_func_v2,
                     distance2bbox, get_activation, inverse_sigmoid,
                     weighting_function)
 
-__all__ = ['ECTransformer']
+__all__ = ['ECTransformer', 'QueryGateHead', 'compute_query_gate_coefficients']
+
+
+class QueryGateHead(nn.Module):
+    """Shared L0 query selector used by the QG experiments."""
+
+    def __init__(self, in_dim=256, hidden_dim=64, prior_probability=0.01):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(in_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, 1),
+        )
+        init.constant_(self.net[-1].weight, 0)
+        init.constant_(self.net[-1].bias, bias_init_with_prob(prior_probability))
+
+    def forward(self, query):
+        return self.net(query)
+
+
+def compute_query_gate_coefficients(query, head, *, dn_meta, heads, points):
+    """Compute one L0 decision and preserve the denoising-query prefix."""
+    dn_queries = int(dn_meta['dn_num_split'][0]) if dn_meta is not None else 0
+    normal_query = query[:, dn_queries:]
+    logits = head(normal_query).squeeze(-1)
+    probability = logits.sigmoid()
+    normal_coefficients = 1.0 - 0.8 * probability
+    prefix = normal_coefficients.new_ones(query.shape[0], dn_queries)
+    all_coefficients = torch.cat((prefix, normal_coefficients), dim=1)
+    coefficients = all_coefficients[:, :, None, None].expand(
+        query.shape[0], query.shape[1], int(heads), int(points)
+    )
+    return {
+        'logits': logits,
+        'probability': probability,
+        'coefficients': coefficients,
+    }
     
 
 class MLP(nn.Module):
@@ -167,7 +203,8 @@ class MSDeformableAttention(nn.Module):
                 query: torch.Tensor,
                 reference_points: torch.Tensor,
                 value: torch.Tensor,
-                value_spatial_shapes: List[int]):
+                value_spatial_shapes: List[int],
+                sample_coefficients=None):
         """
         Args:
             query (Tensor): [bs, query_length, C]
@@ -202,7 +239,19 @@ class MSDeformableAttention(nn.Module):
                 "Last dim of reference_points must be 2 or 4, but get {} instead.".
                 format(reference_points.shape[-1]))
 
-        output = self.ms_deformable_attn_core(value, value_spatial_shapes, sampling_locations, attention_weights, self.num_points_list)
+        core_args = (
+            value,
+            value_spatial_shapes,
+            sampling_locations,
+            attention_weights,
+            self.num_points_list,
+        )
+        if sample_coefficients is None:
+            output = self.ms_deformable_attn_core(*core_args)
+        else:
+            output = self.ms_deformable_attn_core(
+                *core_args, sample_coefficients=sample_coefficients
+            )
 
         return output
 
@@ -254,7 +303,8 @@ class TransformerDecoderLayer(nn.Module):
                 value,
                 spatial_shapes,
                 attn_mask=None,
-                query_pos_embed=None):
+                query_pos_embed=None,
+                sample_coefficients=None):
 
         # self attention
         q = k = self.with_pos_embed(target, query_pos_embed)
@@ -268,7 +318,8 @@ class TransformerDecoderLayer(nn.Module):
             self.with_pos_embed(target, query_pos_embed),
             reference_points,
             value,
-            spatial_shapes)
+            spatial_shapes,
+            sample_coefficients=sample_coefficients)
 
         target = self.gateway(target, self.dropout2(target2))
 
@@ -304,6 +355,11 @@ class TransformerDecoder(nn.Module):
         self.use_lqe = use_lqe
         self.use_pre_outputs = use_pre_outputs
         self.eval_idx = eval_idx if eval_idx >= 0 else num_layers + eval_idx
+        self.query_gate_head = None
+        self.query_gate_enabled = False
+        self.query_gate_layers = 3
+        self.last_query_gate_logits = None
+        self.last_query_gate_probability = None
         self.up, self.reg_scale, self.reg_max = up, reg_scale, reg_max
         self.layers = nn.ModuleList([copy.deepcopy(decoder_layer) for _ in range(self.eval_idx + 1)] \
                     + [copy.deepcopy(decoder_layer_wide) for _ in range(num_layers - self.eval_idx - 1)])
@@ -367,6 +423,21 @@ class TransformerDecoder(nn.Module):
         ref_points_detach = F.sigmoid(ref_points_unact)
         query_pos_embed = query_pos_head(ref_points_detach).clamp(min=-10, max=10)
 
+        gate_state = None
+        self.last_query_gate_logits = None
+        self.last_query_gate_probability = None
+        if self.query_gate_head is not None and self.query_gate_enabled:
+            first_cross_attention = self.layers[0].cross_attn
+            gate_state = compute_query_gate_coefficients(
+                output,
+                self.query_gate_head,
+                dn_meta=dn_meta,
+                heads=first_cross_attention.num_heads,
+                points=sum(first_cross_attention.num_points_list),
+            )
+            self.last_query_gate_logits = gate_state['logits']
+            self.last_query_gate_probability = gate_state['probability']
+
         for i, layer in enumerate(self.layers):
             ref_points_input = ref_points_detach.unsqueeze(2)
 
@@ -376,7 +447,36 @@ class TransformerDecoder(nn.Module):
                 output = F.interpolate(output, size=query_pos_embed.shape[-1])
                 output_detach = output.detach()
 
-            output = layer(output, ref_points_input, value, spatial_shapes, attn_mask, query_pos_embed)
+            sample_coefficients = None
+            if gate_state is not None and i < self.query_gate_layers:
+                cross_attention = layer.cross_attn
+                expected_heads = cross_attention.num_heads
+                expected_points = sum(cross_attention.num_points_list)
+                if (
+                    gate_state['coefficients'].shape[2] == expected_heads
+                    and gate_state['coefficients'].shape[3] == expected_points
+                ):
+                    sample_coefficients = gate_state['coefficients']
+                else:
+                    query_coefficients = torch.cat((
+                        gate_state['probability'].new_ones(
+                            output.shape[0],
+                            output.shape[1] - gate_state['probability'].shape[1],
+                        ),
+                        1.0 - 0.8 * gate_state['probability'],
+                    ), dim=1)
+                    sample_coefficients = query_coefficients[:, :, None, None].expand(
+                        output.shape[0], output.shape[1], expected_heads, expected_points
+                    )
+            output = layer(
+                output,
+                ref_points_input,
+                value,
+                spatial_shapes,
+                attn_mask,
+                query_pos_embed,
+                sample_coefficients=sample_coefficients,
+            )
 
             if i == 0 and (self.use_aux_distribution or self.use_pre_outputs):
                 if pre_bbox_head is None:
@@ -510,10 +610,19 @@ class ECTransformer(nn.Module):
         # Transformer module
         self.up = nn.Parameter(torch.tensor([0.5]), requires_grad=False) if use_aux_distribution else None
         self.reg_scale = nn.Parameter(torch.tensor([reg_scale]), requires_grad=False) if use_aux_distribution else None
+        # `num_points` may be a single per-level list (the legacy format) or
+        # one per-level list for each decoder layer.
+        if isinstance(num_points, list) and num_points and isinstance(num_points[0], list):
+            if len(num_points) != num_layers:
+                raise ValueError('layer-wise num_points must have one entry per decoder layer')
+            layer_points = num_points
+        else:
+            layer_points = [num_points for _ in range(num_layers)]
+
         decoder_layer = TransformerDecoderLayer(hidden_dim, nhead, dim_feedforward, dropout, \
-            activation, num_levels, num_points, cross_attn_method=cross_attn_method)
+            activation, num_levels, layer_points[0], cross_attn_method=cross_attn_method)
         decoder_layer_wide = TransformerDecoderLayer(hidden_dim, nhead, dim_feedforward, dropout, \
-            activation, num_levels, num_points, cross_attn_method=cross_attn_method, layer_scale=layer_scale)
+            activation, num_levels, layer_points[-1], cross_attn_method=cross_attn_method, layer_scale=layer_scale)
         
         # SegmetationHead
         segmentation_head = SegmentationHead(hidden_dim, num_layers, downsample_ratio=mask_downsample_ratio, image_size=eval_spatial_size) if mask_downsample_ratio else None
@@ -524,6 +633,17 @@ class ECTransformer(nn.Module):
                                           use_aux_distribution=use_aux_distribution,
                                           use_lqe=use_lqe,
                                           use_pre_outputs=use_pre_outputs)
+        # Rebuild the decoder layers when point counts vary by layer.  The
+        # existing eval_idx split still controls the wide-layer transition.
+        if any(points != layer_points[0] for points in layer_points[1:]):
+            self.decoder.layers = nn.ModuleList([
+                TransformerDecoderLayer(
+                    hidden_dim, nhead, dim_feedforward, dropout, activation,
+                    num_levels, points, cross_attn_method=cross_attn_method,
+                    layer_scale=layer_scale if i > self.decoder.eval_idx else None,
+                )
+                for i, points in enumerate(layer_points)
+            ])
       # denoising
         self.num_denoising = num_denoising
         self.label_noise_ratio = label_noise_ratio

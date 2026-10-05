@@ -1,0 +1,16 @@
+__include__: [
+  'ecdet_l_dinov2s_liver_363_50e.yml',
+]
+
+# Same pretrained DINOv2-S and optimizer as ECDet-L; only detector-side neck
+# and decoder capacity are raised to ECDet-X.
+output_dir: outputs/ablation/ecdet_x_dinov2s_liver_363_50e
+
+HybridEncoder:
+  expansion: 1.5
+  dim_feedforward: 2048
+
+ECTransformer:
+  dim_feedforward: 2048
+  num_points: [3, 6, 3]
+

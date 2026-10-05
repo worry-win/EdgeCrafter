@@ -1,0 +1,8 @@
+__include__: [
+  'ecdet_x_mae_dino_vitb_liver_direct_363_100e_es10.yml',
+]
+
+# Direct Breast fine-tuning from the MAE-DINO ViT-B/16 encoder only.
+# The EC-X projector, HybridEncoder, decoder, and 4-class heads remain random.
+output_dir: outputs/ablation/ecdet_x_mae_dino_vitb_breast_direct_363_100e_es10
+num_classes: 4

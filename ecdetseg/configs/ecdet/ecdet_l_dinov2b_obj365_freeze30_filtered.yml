@@ -1,0 +1,15 @@
+__include__: [
+  'ecdet_l_dinov2b_obj365_freeze30.yml',
+]
+
+# Same 8-GPU / per-GPU batch-24 experiment as the original Objects365 run,
+# but exclude the three image records that are absent from the extracted data.
+output_dir: outputs/pretrain/ecdet_l_dinov2b_obj365_freeze30_filtered_bs24_8gpu_seed42
+
+train_dataloader:
+  total_batch_size: 192
+  dataset:
+    ann_file: /cobot/Code/wanrui/EdgeCrafter/outputs/obj365_validation/zhiyuan_objv2_train_filtered_existing.json
+
+val_dataloader:
+  total_batch_size: 192

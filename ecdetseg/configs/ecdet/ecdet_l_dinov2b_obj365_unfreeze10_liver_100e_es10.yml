@@ -1,0 +1,20 @@
+__include__: ['ecdet_l_dinov2b_ecl_o365_decoderbody_breast_363_100e_es20.yml']
+
+# Same model/training settings as Breast; seven Liver lesion classes.
+output_dir: outputs/finetune/ecdet_l_dinov2b_obj365_unfreeze10_liver_100e_es10_bs32_4gpu_seed42
+num_classes: 7
+freeze_backbone: false
+epochs: 100
+early_stop_patience: 10
+
+train_dataloader:
+  total_batch_size: 32
+  dataset:
+    img_folder: /cobot/Data/Lesion_det/det_liver/img
+    ann_file: /cobot/Data/Lesion_det/det_liver/annotations/Lesion/Ignore_Delete-Image/train.json
+
+val_dataloader:
+  total_batch_size: 32
+  dataset:
+    img_folder: /cobot/Data/Lesion_det/det_liver/img
+    ann_file: /cobot/Data/Lesion_det/det_liver/annotations/Lesion/Ignore_Delete-Image/valid.json

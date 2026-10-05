@@ -7,6 +7,7 @@ Copyright(c) 2023 lyuwenyu. All Rights Reserved.
 """
 
 import atexit
+import datetime
 import os
 import random
 import time
@@ -41,7 +42,14 @@ def setup_distributed(print_rank: int=0, print_method: str='builtin', seed: int=
 
         torch.cuda.set_device(LOCAL_RANK)
         # torch.distributed.init_process_group(backend=backend, init_method='env://')
-        torch.distributed.init_process_group(init_method='env://')
+        # Watchdog timeout for collectives. 1800 s is PyTorch's own default;
+        # EC_DIST_TIMEOUT_SEC raises it for runs whose CPU-side post-processing
+        # can legitimately outlast the default on a busy/shared node.
+        _pg_timeout = int(os.getenv('EC_DIST_TIMEOUT_SEC', '1800'))
+        torch.distributed.init_process_group(
+            init_method='env://',
+            timeout=datetime.timedelta(seconds=_pg_timeout),
+        )
         # torch.distributed.barrier()
         
         # rank = torch.distributed.get_rank()
@@ -154,13 +162,18 @@ def de_model(model):
 def warp_loader(loader, shuffle=False):
     if is_dist_available_and_initialized():
         sampler = DistributedSampler(loader.dataset, shuffle=shuffle)
-        loader = DataLoader(loader.dataset,
-                            loader.batch_size,
-                            sampler=sampler,
-                            drop_last=loader.drop_last,
-                            collate_fn=loader.collate_fn,
-                            pin_memory=loader.pin_memory,
-                            num_workers=loader.num_workers)
+        loader_kwargs = {
+            'sampler': sampler,
+            'drop_last': loader.drop_last,
+            'collate_fn': loader.collate_fn,
+            'pin_memory': loader.pin_memory,
+            'num_workers': loader.num_workers,
+        }
+        if loader.num_workers > 0:
+            loader_kwargs['prefetch_factor'] = loader.prefetch_factor
+            loader_kwargs['persistent_workers'] = loader.persistent_workers
+            loader_kwargs['multiprocessing_context'] = loader.multiprocessing_context
+        loader = DataLoader(loader.dataset, loader.batch_size, **loader_kwargs)
     return loader
 
 
@@ -214,6 +227,17 @@ def all_gather(data):
     data_list = [None] * world_size
     torch.distributed.all_gather_object(data_list, data)
     return data_list
+
+
+def gather_on_main(data):
+    """Gather a picklable object on rank 0 without replicating it on every rank."""
+    world_size = get_world_size()
+    if world_size == 1:
+        return [data]
+
+    gathered = [None] * world_size if is_main_process() else None
+    torch.distributed.gather_object(data, gathered, dst=0)
+    return gathered
 
 
 def sync_time():

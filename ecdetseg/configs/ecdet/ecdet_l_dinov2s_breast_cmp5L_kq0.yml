@@ -1,0 +1,2 @@
+__include__: ['ecdet_l_dinov2s_breast_cmp5L_kq_15e_base.yml']
+output_dir: outputs/ablation/cmp5L_shared_query_kd/KQ0

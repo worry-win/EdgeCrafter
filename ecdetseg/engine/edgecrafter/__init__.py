@@ -13,6 +13,7 @@ from .dinov2_adapter import DinoV2Adapter
 from .ecvit import ViTAdapter
 from .hybrid_encoder import HybridEncoder
 from .lwdetr_backbone import LWDetrBackbone
+from .mae_dino_backbone import MAEDinoViTBackbone
 from .matcher import HungarianMatcher
 from .modeling import ECDet, ECSeg, IdentityEncoder
 from .postprocessor import PostProcessor

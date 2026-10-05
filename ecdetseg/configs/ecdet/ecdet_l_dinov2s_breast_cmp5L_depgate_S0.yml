@@ -1,0 +1,2 @@
+__include__: ['ecdet_l_dinov2s_breast_cmp5L_depgate_15e_base.yml']
+output_dir: outputs/ablation/cmp5L_depgate_e2e/S0_baseline

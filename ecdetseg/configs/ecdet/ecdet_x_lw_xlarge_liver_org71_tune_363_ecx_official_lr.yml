@@ -1,0 +1,25 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_org71_tune_363.yml',
+]
+
+# Strict ECDet-X optimizer policy for full 71-class checkpoint fine-tuning:
+# every backbone parameter uses 2.5e-6; HybridEncoder and ECTransformer use
+# the detector default 5e-4. All other training settings are inherited.
+output_dir: outputs/ablation/ecdet_x_lw_xlarge_liver_org71_tune_363_ecx_official_lr
+
+optimizer:
+  type: AdamW
+  params:
+    -
+      params: '^backbone\.(?!.*(?:norm|bn|bias)).*$'
+      lr: 0.0000025
+    -
+      params: '^backbone\.(?=.*(?:norm|bn|bias)).*$'
+      lr: 0.0000025
+      weight_decay: 0.0
+    -
+      params: '^(?!backbone\.)(?=.*(?:norm|bn|bias)).*$'
+      weight_decay: 0.0
+  lr: 0.0005
+  betas: [0.9, 0.999]
+  weight_decay: 0.000125

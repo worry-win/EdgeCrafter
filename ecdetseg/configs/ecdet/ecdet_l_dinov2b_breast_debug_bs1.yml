@@ -1,0 +1,45 @@
+# ============================================================
+# Debug config: fresh (no pretrained weight) model, min batch=1,
+# single-GPU, tiny training loop for F5 debugging in VSCode.
+# ============================================================
+__include__: [ecdet_l_dinov2b_ecl_o365_decoderbody_breast_363_100e_es20.yml]
+
+output_dir: outputs/debug/ecdet_l_dinov2b_breast_debug_bs1
+num_classes: 4
+epochs: 3
+early_stop_patience: 0
+print_freq: 1
+checkpoint_freq: 1
+warmup_iter: 10
+
+# Fresh model: do NOT load DINOv2 pretrained backbone weights.
+DinoV2Adapter:
+  backbone_name: vit_base_patch14_reg4_dinov2
+  weights_path: /cobot/Code/CODE/eomt/checkpoints/dinov2/vit_base_patch14_reg4_dinov2.pth
+  skip_load_backbone: true
+
+train_dataloader:
+  total_batch_size: 1
+  shuffle: true
+  num_workers: 0
+  drop_last: false
+  dataset:
+    type: CocoDetection
+    img_folder: /cobot/Data/Lesion_det/det_breast/img
+    ann_file: /cobot/Data/Lesion_det/det_breast/annotations/Lesion/Ignore_Delete-Image/train.json
+    transforms:
+      policy: default
+      ops:
+        - {type: Resize, size: [640, 640]}
+        - {type: ConvertPILImage, dtype: float32, scale: true}
+        - {type: Normalize, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+        - {type: ConvertBoxes, fmt: cxcywh, normalize: true}
+
+val_dataloader:
+  total_batch_size: 1
+  shuffle: false
+  num_workers: 0
+  dataset:
+    type: CocoDetection
+    img_folder: /cobot/Data/Lesion_det/det_breast/img
+    ann_file: /cobot/Data/Lesion_det/det_breast/annotations/Lesion/Ignore_Delete-Image/valid.json

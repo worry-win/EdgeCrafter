@@ -1,0 +1,24 @@
+__include__: ['ecdet_l_dinov2s_breast_cmp5L_kq_15e_base.yml']
+
+# KQ-B locked experiment: Mosaic and MixUp end at zero-based epoch 9.
+# All other training/validation settings inherit the historical KQ budget.
+output_dir: outputs/ablation/cmp5L_KQB/KQB
+train_dataloader:
+  dataset:
+    transforms:
+      mosaic_epoch: 9
+  collate_fn:
+    mixup_epoch: 9
+
+shared_query_kd:
+  enabled: true
+  teacher_memory_mode: privileged_np
+  layers: [0, 1, 2, 3]
+  weight: 0.5
+  output_weight: 3.643302750228453
+  output_loss: sigmoid_soft_bce_grouped
+  output_all_normal_queries: false
+  output_grouping: hungarian_lesions_top20_far_negatives
+  negative_topk: 20
+  negative_max_iou: 0.3
+  empty_image_output_kd: zero

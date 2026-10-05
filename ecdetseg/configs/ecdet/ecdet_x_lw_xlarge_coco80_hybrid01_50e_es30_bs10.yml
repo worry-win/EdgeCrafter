@@ -1,0 +1,19 @@
+__include__: [
+  'ecdet_x_lw_xlarge_multi_organ_71_hybrid01_50e_es30_bs10_debug.yml',
+]
+
+# Job 403 counterpart on MS COCO 2017. Model, initialization, optimization,
+# augmentation, batch and schedule are inherited unchanged.
+output_dir: outputs/pretrain/ecdet_x_lw_xlarge_coco80_hybrid01_50e_es30_bs10
+num_classes: 80
+remap_mscoco_category: true
+
+train_dataloader:
+  dataset:
+    img_folder: /cobot/Data/public/coco/train2017
+    ann_file: /cobot/Data/public/coco/annotations/instances_train2017.json
+
+val_dataloader:
+  dataset:
+    img_folder: /cobot/Data/public/coco/val2017
+    ann_file: /cobot/Data/public/coco/annotations/instances_val2017.json

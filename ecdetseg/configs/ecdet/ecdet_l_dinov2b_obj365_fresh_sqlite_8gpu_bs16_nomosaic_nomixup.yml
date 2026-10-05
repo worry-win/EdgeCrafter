@@ -1,0 +1,15 @@
+__include__: [
+  'ecdet_l_dinov2b_obj365_freeze30_filtered_4gpu_bs16acc2_sqlite_w2pf1_no_mosaic_mixup.yml',
+]
+
+# Fresh eight-GPU Objects365 training.  Load only the official frozen
+# DINOv2-Base backbone; ECDet-L projector/neck/decoder/heads start randomly.
+output_dir: outputs/pretrain/ecdet_l_dinov2b_obj365_fresh_sqlite_8gpu_bs16_nomosaic_nomixup_seed42
+gradient_accumulation_steps: 1
+skip_resume_eval: false
+
+train_dataloader:
+  total_batch_size: 128
+
+val_dataloader:
+  total_batch_size: 128

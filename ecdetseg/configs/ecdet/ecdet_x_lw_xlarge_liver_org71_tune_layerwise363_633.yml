@@ -1,0 +1,9 @@
+__include__: [
+  'ecdet_x_lw_xlarge_liver_org71_tune_363.yml',
+]
+
+output_dir: outputs/ablation/ecdet_x_lw_xlarge_liver_org71_tune_layerwise363_633
+
+ECTransformer:
+  num_points: [[3, 6, 3], [6, 3, 3], [6, 3, 3], [3, 6, 3]]
+

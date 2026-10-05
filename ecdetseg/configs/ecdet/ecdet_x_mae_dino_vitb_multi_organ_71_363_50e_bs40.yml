@@ -1,0 +1,24 @@
+__include__: [
+  'ecdet_x_mae_dino_vitb_liver_363_50e.yml',
+]
+
+# Stage 1: MAE-DINO ViT-B/16 encoder -> random EC-X projector/neck/decoder.
+# Pretrain the complete detector on the 71-class multi-organ dataset.
+output_dir: outputs/pretrain/ecdet_x_mae_dino_vitb_multi_organ_71_363_50e_bs40
+num_classes: 71
+remap_mscoco_category: false
+epochs: 50
+early_stop_patience: 30
+gradient_accumulation_steps: 1
+
+train_dataloader:
+  total_batch_size: 40
+  dataset:
+    img_folder: /cobot/Data/seg_all_moreOrgan/images
+    ann_file: /cobot/Data/seg_all_moreOrgan/instances_train.json
+
+val_dataloader:
+  total_batch_size: 40
+  dataset:
+    img_folder: /cobot/Data/seg_all_moreOrgan/images
+    ann_file: /cobot/Data/seg_all_moreOrgan/instances_test.json

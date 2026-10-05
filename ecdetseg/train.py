@@ -39,7 +39,7 @@ if debug:
 def main(args, ) -> None:
     """main
     """
-    mp.set_sharing_strategy('file_system')
+    mp.set_sharing_strategy(os.environ.get('EC_MP_SHARING_STRATEGY', 'file_system'))
     dist_utils.setup_distributed(args.print_rank, args.print_method, seed=args.seed)
 
     assert not all([args.tuning, args.resume]), \

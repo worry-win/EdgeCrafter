@@ -1,0 +1,8 @@
+__include__: [
+  'ecdet_x_lw_xlarge_breast_org71_full_363_100e_es10.yml',
+]
+
+# Keep the completed 71-class detector transfer unchanged; only give it a
+# 20-epoch patience window before early stopping.
+output_dir: outputs/ablation/ecdet_breast_lw_org71_full_big_lr_100e_es20
+early_stop_patience: 20

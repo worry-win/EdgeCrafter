@@ -1,0 +1,27 @@
+__include__: ['ecdet_l_dinov2b_obj365_unfreeze10_breast_100e_es10.yml']
+
+output_dir: outputs/finetune/ecdet_l_dinov2b_obj365_unfreeze10_joint17_100e_es10_bs32_4gpu_seed42
+num_classes: 17
+remap_mscoco_category: false
+freeze_backbone: false
+epochs: 100
+early_stop_patience: 10
+
+train_dataloader:
+  total_batch_size: 32
+  dataset:
+    img_folder: /cobot/Code/xiangshaochong/联合训练检测数据集/images
+    ann_file: /cobot/Code/xiangshaochong/联合训练检测数据集/annotations/instances_train.json
+    transforms:
+      mosaic_epoch: 24
+      mosaic_prob: 1.0
+      stop_epoch: 98
+  collate_fn:
+    mixup_prob: 1.0
+    mixup_epoch: 24
+
+val_dataloader:
+  total_batch_size: 32
+  dataset:
+    img_folder: /cobot/Code/xiangshaochong/联合训练检测数据集/images
+    ann_file: /cobot/Code/xiangshaochong/联合训练检测数据集/annotations/instances_valid.json

@@ -1,0 +1,8 @@
+__include__: [
+  'ecdet_l_dinov2b_obj365_fresh_sqlite_8gpu_bs20_w4_nomosaic_nomixup.yml',
+]
+
+# Keep four workers per DDP rank, but create clean worker interpreters instead
+# of forking the CUDA-initialized trainer process.
+train_dataloader:
+  multiprocessing_context: spawn

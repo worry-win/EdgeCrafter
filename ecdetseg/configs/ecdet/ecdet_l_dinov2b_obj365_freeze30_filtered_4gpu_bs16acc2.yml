@@ -1,0 +1,14 @@
+__include__: [
+  'ecdet_l_dinov2b_obj365_freeze30_filtered.yml',
+]
+
+# Four GPUs x batch 16. Accumulate two micro-batches to preserve an effective
+# global batch of 128 while reducing DDP ranks and per-node pressure.
+output_dir: outputs/pretrain/ecdet_l_dinov2b_obj365_freeze30_filtered_4gpu_bs16acc2_seed42
+gradient_accumulation_steps: 2
+
+train_dataloader:
+  total_batch_size: 64
+
+val_dataloader:
+  total_batch_size: 64

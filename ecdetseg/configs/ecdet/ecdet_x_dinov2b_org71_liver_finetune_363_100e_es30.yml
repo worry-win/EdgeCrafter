@@ -1,0 +1,5 @@
+__include__: ['ecdet_x_dinov2b_org71_liver_finetune_363_100e_es10.yml']
+
+# Fresh retraining of 907_0 with a longer early-stopping window.
+output_dir: outputs/ablation/ecdet_x_dinov2b_org71_liver_finetune_363_100e_es30
+early_stop_patience: 30

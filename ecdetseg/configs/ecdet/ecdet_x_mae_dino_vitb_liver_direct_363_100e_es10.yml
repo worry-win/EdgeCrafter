@@ -1,0 +1,17 @@
+__include__: [
+  'ecdet_x_mae_dino_vitb_liver_direct_363_50e.yml',
+]
+
+# MAE-DINO ViT-B encoder -> random EC-X projector/neck/decoder on Liver.
+output_dir: outputs/ablation/ecdet_x_mae_dino_vitb_liver_direct_363_100e_es10
+epochs: 100
+early_stop_patience: 10
+
+train_dataloader:
+  total_batch_size: 32
+  dataset:
+    transforms:
+      stop_epoch: 98
+
+val_dataloader:
+  total_batch_size: 32
