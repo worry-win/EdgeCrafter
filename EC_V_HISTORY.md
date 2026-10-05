@@ -44,3 +44,5 @@ The CUDA probe is a separate process, repeats the production deformable attentio
 Begin later methods from this branch, keep this baseline recipe immutable, and create separate versioned configurations and outputs for each authorized method. Do not silently mix ES early stopping, shared warmup, 100+2 finish phases or V8 reference KL into V recipes. Adapting datasets requires approved splits/class maps, appropriate common initialization, and fresh train-only calibration. Never start another organ from a mature breast V3 best by default.
 
 Checkpoints, data, predictions, logs and outputs are not in Git. Only the necessary Slurm scripts are tracked despite the inherited ignore rule. Cluster asset paths in the historical YAML are explicit provenance; a new environment must provide and verify them before running.
+
+The historical Linux tree contains two test names differing only in `cmp5L` versus `cmp5l`, with identical content. Git preserves both names; case-insensitive macOS may show one physical file. Execution snapshots are verified on Linux against the original full file manifest. This alias has no role in training.

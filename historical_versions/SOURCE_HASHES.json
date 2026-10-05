@@ -1,5 +1,5 @@
 {
-  "original_v1": {
+  "code_snapshot_v1": {
     "ecdetseg/README.md": "92860f19426a2460b482adb179c67d794094d941ffe3c1245498d4ed68575adf",
     "ecdetseg/README_zh.md": "6c6f2c97141e7c1ce71e017e6222012099a18a44614b015254d9ce323c0f31ed",
     "ecdetseg/configs/dataset/coco.yml": "24f2223471325157f4e8aa3e8b1d99a93b6cae214228725fa23a9aa6b7d9f542",
@@ -285,6 +285,7 @@
     "ecdetseg/tests/test_cmp5l_kqb_grouped_kd.py": "15d9815abac1f00d1caffddfcb4a26cc85f51469c54cd7454ba1ae1c129e7d99",
     "ecdetseg/tests/test_cmp5l_kqr_kqu_objectives.py": "b77b835b1bd287c88ddb643f9798ef0a055b457b06cbbfc854fa47e1f499a29a",
     "ecdetseg/tests/test_cmp5l_l1_box_guided_attention.py": "22e89da3f3c71c7315bd612b25501eb2b32ba569d4265c0e343e0efb7ff3b33c",
+    "ecdetseg/tests/test_cmp5l_mask_after_hybridencoder.py": "8f112d19f8f2b79d9d64affd9c4d264a04a64198c9e7f7569376b0108996e599",
     "ecdetseg/tests/test_cmp5l_oracle_gated_l1_attention.py": "ca132da91b206d0bc65f332cda3d2b6e77289c511e22d5d49d2aa96c03e2392b",
     "ecdetseg/tests/test_cmp5l_privileged_decision_kd.py": "dc94817e1e1cb5a8ea614cec1cb8109ed3f46e8cf3f04aefad31c1f03be77bba",
     "ecdetseg/tests/test_cmp5l_privileged_ema_analysis.py": "b3523c652662dbe8f355fb8bb83f51598634a4b17ec4ba2672ca910f337d32a9",
@@ -485,7 +486,7 @@
     "slurm/cmp5L_EC_Y_preflight.sbatch": "239e5bb43839dec5265e267fc3be9c9b531493cad6572fa0fc5fec098a46a17b",
     "slurm/cmp5L_EC_fullcycle_one_arm.sbatch": "e7b0ecc000cb2f91ba63870d9b5bfa2de394bebd856cd46217ec8fdfef9f52f5"
   },
-  "original_v7_fix1": {
+  "code_snapshot_v7_fix1": {
     "ecdetseg/README.md": "92860f19426a2460b482adb179c67d794094d941ffe3c1245498d4ed68575adf",
     "ecdetseg/README_zh.md": "6c6f2c97141e7c1ce71e017e6222012099a18a44614b015254d9ce323c0f31ed",
     "ecdetseg/configs/dataset/coco.yml": "24f2223471325157f4e8aa3e8b1d99a93b6cae214228725fa23a9aa6b7d9f542",
@@ -771,6 +772,7 @@
     "ecdetseg/tests/test_cmp5l_kqb_grouped_kd.py": "15d9815abac1f00d1caffddfcb4a26cc85f51469c54cd7454ba1ae1c129e7d99",
     "ecdetseg/tests/test_cmp5l_kqr_kqu_objectives.py": "b77b835b1bd287c88ddb643f9798ef0a055b457b06cbbfc854fa47e1f499a29a",
     "ecdetseg/tests/test_cmp5l_l1_box_guided_attention.py": "22e89da3f3c71c7315bd612b25501eb2b32ba569d4265c0e343e0efb7ff3b33c",
+    "ecdetseg/tests/test_cmp5l_mask_after_hybridencoder.py": "8f112d19f8f2b79d9d64affd9c4d264a04a64198c9e7f7569376b0108996e599",
     "ecdetseg/tests/test_cmp5l_oracle_gated_l1_attention.py": "ca132da91b206d0bc65f332cda3d2b6e77289c511e22d5d49d2aa96c03e2392b",
     "ecdetseg/tests/test_cmp5l_privileged_decision_kd.py": "dc94817e1e1cb5a8ea614cec1cb8109ed3f46e8cf3f04aefad31c1f03be77bba",
     "ecdetseg/tests/test_cmp5l_privileged_ema_analysis.py": "b3523c652662dbe8f355fb8bb83f51598634a4b17ec4ba2672ca910f337d32a9",
